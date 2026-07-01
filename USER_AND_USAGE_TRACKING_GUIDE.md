@@ -2,8 +2,11 @@
 
 Yes! It is absolutely possible to track specific users, teams, and usage details. To achieve this level of sophistication, we must go beyond platform-level aggregate metrics. 
 
-We have deployed a second, advanced dashboard to your Google Cloud project:
+We have deployed a second, advanced, and unified dashboard to your Google Cloud project:
 👉 **[geap-monitoring-dashboard-v2.json](geap-monitoring-dashboard-v2.json)**
+
+> [!NOTE]
+> **Unified PromQL Architecture**: Dashboard v2 has been migrated to PromQL with logical fallbacks (`or`). This means a single dashboard definition natively and dynamically supports **both** Solution A1 and Solution A2. If you start with Solution A1, the charts display request counts; once you deploy Solution A2, the dashboard automatically transitions to plotting exact token count metrics!
 
 Here are the two industry-standard patterns to implement per-user and per-team tracking:
 
@@ -16,7 +19,7 @@ To populate your dashboard with per-user data, we have configured and created th
 ### 🛠️ Solution A1: No-Code Audit Logs (Request Counts) - *DEPLOYED!* ⚡
 If you want to track developer request counts without changing any code or CLI configuration:
 1. We verified that **Vertex AI Data Access Audit Logs are already enabled** in your project `coffee-and-codey` for `aiplatform.googleapis.com`.
-2. We deployed the log-based metric `user_tokens` using our pre-built configuration:
+2. We deployed the log-based metric `user_tokens` using our pre-built, hardened configuration:
    👉 **[user-tokens-audit-log.yaml](user-tokens-audit-log.yaml)**
 3. When any developer runs local `agy` or `GeminiCLI` commands, the audit logs will automatically capture their email (`user_id`) and the model called (`model_id`), feeding them into Dashboard v2!
 

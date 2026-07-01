@@ -1,8 +1,11 @@
 # ☕ How to Collect Developer User Data for Antigravity & GeminiCLI
 
-Because **Antigravity** (`agy`) and **GeminiCLI** are CLI tools running on developers' local machines, their default network requests flow directly to Vertex AI without writing standard application-level logs into your central **Google Cloud Logging** system. As a result, the v2 (User Tracking) dashboard starts empty.
+Because **Antigravity** (`agy`) and **GeminiCLI** are CLI tools running on developers' local machines, their default network requests flow directly to Vertex AI without writing standard application-level logs into your central **Google Cloud Logging** system. As a result, the v2 (User Tracking) dashboard starts empty by default.
 
 To populate your dashboard with per-user data, we have created two ready-to-use custom Log-Based Metric configurations. Choose one of the two standard solutions below:
+
+> [!TIP]
+> **Dashboard v2 Dynamic Fallback**: Dashboard v2 employs standard PromQL logical fallbacks (`or`). You can deploy Option 1 first (No-Code Audit Logs) to immediately track request counts, and later deploy Option 2 (Lightweight Proxy) to track exact tokens. Dashboard v2 will automatically detect and transition to exact token graphs without any dashboard configuration changes!
 
 ---
 
@@ -45,22 +48,28 @@ from fastapi import FastAPI, Request
 from google import genai
 
 app = FastAPI()
-client = genai.Client()
 
 @app.post("/v1/projects/{project}/locations/{location}/publishers/google/models/{model_id}:generateContent")
 async def proxy_generate_content(project: str, location: str, model_id: str, request: Request):
     # 1. Identify the user from their caller token or headers (e.g., identity-aware proxy)
     user_email = request.headers.get("X-Forwarded-User", "unknown@company.com")
     
-    # 2. Forward call to Vertex AI
+    # 2. Instantiate Client Dynamically for the given Project and Location
+    client = genai.Client(vertexai=True, project=project, location=location)
+    
+    # 3. Forward call to Vertex AI
     req_body = await request.json()
-    response = client.models.generate_content(model=model_id, contents=req_body.get("contents"))
+    response = client.models.generate_content(
+        model=model_id,
+        contents=req_body.get("contents"),
+        config=req_body.get("config")
+    )
     
     input_tokens = response.usage_metadata.prompt_token_count or 0
     output_tokens = response.usage_metadata.candidates_token_count or 0
     total_tokens = input_tokens + output_tokens
     
-    # 3. Log user and exact token counts to Cloud Logging
+    # 4. Log user and exact token counts to Cloud Logging
     logging.info({
         "event": "gemini_call",
         "userId": user_email,
@@ -71,7 +80,8 @@ async def proxy_generate_content(project: str, location: str, model_id: str, req
         "cachedTokens": response.usage_metadata.cached_content_token_count or 0
     })
     
-    return response.model_dump()
+    # 5. Return response in standard Vertex AI REST JSON format
+    return response.model_dump(by_alias=True)
 ```
 
 ### Step 2: Create the Log-Based Metric

@@ -1,6 +1,6 @@
 {
   "displayName": "Developer AI Tools: User Token Tracker",
-  "etag": "2f7d8836b5e7a14c3c22cdc5cbd9f559",
+  "etag": "977154ffa8b5824a0f405a362e46bcad",
   "gridLayout": {
     "columns": "2",
     "widgets": [
@@ -12,85 +12,55 @@
         }
       },
       {
-        "title": "Token Consumption by User (Over Time)",
+        "title": "Token Consumption (or Requests) by User (Over Time)",
         "xyChart": {
           "dataSets": [
             {
               "timeSeriesQuery": {
-                "timeSeriesFilter": {
-                  "filter": "metric.type=\"logging.googleapis.com/user/user_tokens\"",
-                  "aggregation": {
-                    "alignmentPeriod": "60s",
-                    "perSeriesAligner": "ALIGN_RATE",
-                    "crossSeriesReducer": "REDUCE_SUM",
-                    "groupByFields": [
-                      "metric.label.user_id"
-                    ]
-                  }
-                }
+                "prometheusQuery": "sum(rate(logging_googleapis_com:user_user_tokens_sum[1m])) by (user_id) or sum(rate(logging_googleapis_com:user_user_tokens[1m])) by (user_id)"
               },
               "plotType": "LINE",
               "targetAxis": "Y1"
             }
           ],
           "yAxis": {
-            "label": "Tokens / Second (Rate)",
+            "label": "Rate / Second",
             "scale": "LINEAR"
           }
         }
       },
       {
-        "title": "Total Tokens Consumed per User",
+        "title": "Total Tokens (or Requests) Consumed per User",
         "xyChart": {
           "dataSets": [
             {
               "timeSeriesQuery": {
-                "timeSeriesFilter": {
-                  "filter": "metric.type=\"logging.googleapis.com/user/user_tokens\"",
-                  "aggregation": {
-                    "alignmentPeriod": "60s",
-                    "perSeriesAligner": "ALIGN_SUM",
-                    "crossSeriesReducer": "REDUCE_SUM",
-                    "groupByFields": [
-                      "metric.label.user_id"
-                    ]
-                  }
-                }
+                "prometheusQuery": "sum(increase(logging_googleapis_com:user_user_tokens_sum[1m])) by (user_id) or sum(increase(logging_googleapis_com:user_user_tokens[1m])) by (user_id)"
               },
               "plotType": "STACKED_BAR",
               "targetAxis": "Y1"
             }
           ],
           "yAxis": {
-            "label": "Total Tokens",
+            "label": "Total Count (Tokens or Requests)",
             "scale": "LINEAR"
           }
         }
       },
       {
-        "title": "API Requests count by User",
+        "title": "API Request Count by User (Rate)",
         "xyChart": {
           "dataSets": [
             {
               "timeSeriesQuery": {
-                "timeSeriesFilter": {
-                  "filter": "metric.type=\"logging.googleapis.com/user/user_tokens\"",
-                  "aggregation": {
-                    "alignmentPeriod": "60s",
-                    "perSeriesAligner": "ALIGN_COUNT",
-                    "crossSeriesReducer": "REDUCE_SUM",
-                    "groupByFields": [
-                      "metric.label.user_id"
-                    ]
-                  }
-                }
+                "prometheusQuery": "sum(rate(logging_googleapis_com:user_user_tokens_count[1m])) by (user_id) or sum(rate(logging_googleapis_com:user_user_tokens[1m])) by (user_id)"
               },
               "plotType": "LINE",
               "targetAxis": "Y1"
             }
           ],
           "yAxis": {
-            "label": "Requests / Minute",
+            "label": "Requests / Second",
             "scale": "LINEAR"
           }
         }
@@ -101,47 +71,26 @@
           "dataSets": [
             {
               "timeSeriesQuery": {
-                "timeSeriesFilter": {
-                  "filter": "metric.type=\"logging.googleapis.com/user/user_tokens\"",
-                  "aggregation": {
-                    "alignmentPeriod": "60s",
-                    "perSeriesAligner": "ALIGN_SUM",
-                    "crossSeriesReducer": "REDUCE_SUM",
-                    "groupByFields": [
-                      "metric.label.user_id",
-                      "metric.label.model_id"
-                    ]
-                  }
-                }
+                "prometheusQuery": "sum(increase(logging_googleapis_com:user_user_tokens_sum[1m])) by (user_id, model_id) or sum(increase(logging_googleapis_com:user_user_tokens[1m])) by (user_id, model_id)"
               },
               "plotType": "STACKED_BAR",
               "targetAxis": "Y1"
             }
           ],
           "yAxis": {
-            "label": "Tokens",
+            "label": "Total Count (Tokens or Requests)",
             "scale": "LINEAR"
           }
         }
       },
       {
-        "title": "Total Tokens/Requests Consumed per User per Model (Tabular Summary)",
+        "title": "Total Tokens (or Requests) Consumed per User per Model (Table Summary)",
         "timeSeriesTable": {
           "dataSets": [
             {
               "timeSeriesQuery": {
-                "timeSeriesFilter": {
-                  "filter": "metric.type=\"logging.googleapis.com/user/user_tokens\"",
-                  "aggregation": {
-                    "alignmentPeriod": "60s",
-                    "perSeriesAligner": "ALIGN_SUM",
-                    "crossSeriesReducer": "REDUCE_SUM",
-                    "groupByFields": [
-                      "metric.label.user_id",
-                      "metric.label.model_id"
-                    ]
-                  }
-                }
+                "prometheusQuery": "sum(increase(logging_googleapis_com:user_user_tokens_sum[${__interval}])) by (user_id, model_id) or sum(increase(logging_googleapis_com:user_user_tokens[${__interval}])) by (user_id, model_id)",
+                "outputFullDuration": true
               }
             }
           ],
@@ -149,29 +98,19 @@
         }
       },
       {
-        "title": "Total Invocations/Tokens by Model (All Users)",
+        "title": "Total Tokens (or Requests) Consumed by Model (All Users)",
         "xyChart": {
           "dataSets": [
             {
               "timeSeriesQuery": {
-                "timeSeriesFilter": {
-                  "filter": "metric.type=\"logging.googleapis.com/user/user_tokens\"",
-                  "aggregation": {
-                    "alignmentPeriod": "60s",
-                    "perSeriesAligner": "ALIGN_SUM",
-                    "crossSeriesReducer": "REDUCE_SUM",
-                    "groupByFields": [
-                      "metric.label.model_id"
-                    ]
-                  }
-                }
+                "prometheusQuery": "sum(increase(logging_googleapis_com:user_user_tokens_sum[1m])) by (model_id) or sum(increase(logging_googleapis_com:user_user_tokens[1m])) by (model_id)"
               },
               "plotType": "STACKED_BAR",
               "targetAxis": "Y1"
             }
           ],
           "yAxis": {
-            "label": "Total Count / Tokens",
+            "label": "Total Count (Tokens or Requests)",
             "scale": "LINEAR"
           }
         }

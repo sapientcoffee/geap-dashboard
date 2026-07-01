@@ -14,7 +14,7 @@
 
 name: "user_tokens"
 description: "Exact token counts from central logging proxy for GEAP Dashboard v2"
-filter: 'resource.type="global" OR resource.type="cloud_run_revision" AND jsonPayload.event="gemini_call"'
+filter: '(resource.type="global" OR resource.type="cloud_run_revision") AND jsonPayload.event="gemini_call"'
 valueExtractor: 'EXTRACT(jsonPayload.totalTokens)'
 metricDescriptor:
   metricKind: "DELTA"
