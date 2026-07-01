@@ -1,0 +1,217 @@
+{
+  "displayName": "Developer AI Tools: Aggregate Usage & Cost",
+  "etag": "5d445e8d6c9bad0ffa7c079a5dbde1b4",
+  "gridLayout": {
+    "columns": "2",
+    "widgets": [
+      {
+        "title": "Dashboard Overview & Quick Start",
+        "text": {
+          "content": "# ☕ Developer AI Tools: Aggregate Usage & Cost\n\nThis central dashboard provides real-time, comprehensive visibility into the aggregate usage, throughput, latencies, error rates, and estimated costs of Gemini models across the entire project.\n\n### 🔍 Key Metrics Tracked\n1. **Token Throughput:** Real-time prompt (input) and completion (output) token rates to monitor overall traffic scale.\n2. **Invocations & Health:** API request volume grouped by Model ID and HTTP response codes (successes vs. error codes like 429s/5xx).\n3. **Latencies (TTFT):** 95th Percentile Time-to-First-Token performance, capturing the direct developer responsiveness and performance experience.\n4. **Estimated Spend:** Down-to-the-minute real-time and historical cost estimates based on direct token metrics scaled by Vertex AI list pricing.\n\n### 💡 Using this Dashboard\n* **Timeframe Selection:** Use the time picker in the top-right corner to view metrics over specific windows (e.g., last 1 hour, last 7 days). The summary tables and cost estimations automatically re-calculate totals over your chosen timeframe.\n* **Error Monitoring:** Keep an eye on the *Quota / Rate Limit Exceeded* and *Response Codes* charts to identify if developers are experiencing rate limits (HTTP 429) or other API disruptions.",
+          "format": "MARKDOWN"
+        }
+      },
+      {
+        "title": "Token Consumption by Model and Type (Input vs. Output)",
+        "xyChart": {
+          "dataSets": [
+            {
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "metric.type=\"aiplatform.googleapis.com/publisher/online_serving/token_count\" resource.type=\"aiplatform.googleapis.com/PublisherModel\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "perSeriesAligner": "ALIGN_SUM",
+                    "crossSeriesReducer": "REDUCE_SUM",
+                    "groupByFields": [
+                      "resource.label.model_user_id",
+                      "metric.label.type"
+                    ]
+                  }
+                }
+              },
+              "plotType": "LINE",
+              "targetAxis": "Y1"
+            }
+          ],
+          "yAxis": {
+            "label": "Tokens per Minute (Sum)",
+            "scale": "LINEAR"
+          }
+        }
+      },
+      {
+        "title": "Model Invocations by Model ID",
+        "xyChart": {
+          "dataSets": [
+            {
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "metric.type=\"aiplatform.googleapis.com/publisher/online_serving/model_invocation_count\" resource.type=\"aiplatform.googleapis.com/PublisherModel\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "perSeriesAligner": "ALIGN_SUM",
+                    "crossSeriesReducer": "REDUCE_SUM",
+                    "groupByFields": [
+                      "resource.label.model_user_id"
+                    ]
+                  }
+                }
+              },
+              "plotType": "LINE",
+              "targetAxis": "Y1"
+            }
+          ],
+          "yAxis": {
+            "label": "Requests per Minute (Sum)",
+            "scale": "LINEAR"
+          }
+        }
+      },
+      {
+        "title": "Response Codes (Success vs. Errors)",
+        "xyChart": {
+          "dataSets": [
+            {
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "metric.type=\"aiplatform.googleapis.com/publisher/online_serving/model_invocation_count\" resource.type=\"aiplatform.googleapis.com/PublisherModel\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "perSeriesAligner": "ALIGN_SUM",
+                    "crossSeriesReducer": "REDUCE_SUM",
+                    "groupByFields": [
+                      "metric.label.response_code"
+                    ]
+                  }
+                }
+              },
+              "plotType": "LINE",
+              "targetAxis": "Y1"
+            }
+          ],
+          "yAxis": {
+            "label": "Requests per Minute (Sum)",
+            "scale": "LINEAR"
+          }
+        }
+      },
+      {
+        "title": "Time to First Token (TTFT) - 95th Percentile",
+        "xyChart": {
+          "dataSets": [
+            {
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "metric.type=\"aiplatform.googleapis.com/publisher/online_serving/first_token_latencies\" resource.type=\"aiplatform.googleapis.com/PublisherModel\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "perSeriesAligner": "ALIGN_PERCENTILE_95",
+                    "crossSeriesReducer": "REDUCE_NONE"
+                  }
+                }
+              },
+              "plotType": "LINE",
+              "targetAxis": "Y1"
+            }
+          ],
+          "yAxis": {
+            "label": "Latency (seconds)",
+            "scale": "LINEAR"
+          }
+        }
+      },
+      {
+        "title": "Quota / Rate Limit Exceeded Counts (429s)",
+        "xyChart": {
+          "dataSets": [
+            {
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "metric.type=\"serviceruntime.googleapis.com/quota/rate/exceeded_count\" resource.type=\"consumer_quota\" metric.label.service=\"aiplatform.googleapis.com\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "perSeriesAligner": "ALIGN_SUM",
+                    "crossSeriesReducer": "REDUCE_SUM",
+                    "groupByFields": [
+                      "metric.label.limit_name"
+                    ]
+                  }
+                }
+              },
+              "plotType": "STACKED_BAR",
+              "targetAxis": "Y1"
+            }
+          ],
+          "yAxis": {
+            "label": "Exceeded Count per Minute (Sum)",
+            "scale": "LINEAR"
+          }
+        }
+      },
+      {
+        "title": "Total Tokens by Model and Type (Tabular Summary)",
+        "timeSeriesTable": {
+          "dataSets": [
+            {
+              "timeSeriesQuery": {
+                "timeSeriesFilter": {
+                  "filter": "metric.type=\"aiplatform.googleapis.com/publisher/online_serving/token_count\" resource.type=\"aiplatform.googleapis.com/PublisherModel\"",
+                  "aggregation": {
+                    "alignmentPeriod": "60s",
+                    "perSeriesAligner": "ALIGN_SUM",
+                    "crossSeriesReducer": "REDUCE_SUM",
+                    "groupByFields": [
+                      "resource.label.model_user_id",
+                      "metric.label.type"
+                    ]
+                  }
+                }
+              }
+            }
+          ],
+          "metricVisualization": "NUMBER"
+        }
+      },
+      {
+        "title": "Estimated Cost Calculation Information",
+        "text": {
+          "content": "### 💰 Real-Time Cost Estimation Note\nThe costs shown on this dashboard are **estimated** in real-time (USD). They are calculated by multiplying token consumption metrics by standard Vertex AI pricing:\n\n* **Gemini 3.5 Flash:**\n  * Input: USD 1.50 / 1,000,000 tokens (`mul(0.00000150)`)\n  * Output: USD 9.00 / 1,000,000 tokens (`mul(0.00000900)`)\n* **Gemini 3.1 Pro:**\n  * Input: USD 2.00 / 1,000,000 tokens (`mul(0.00000200)`)\n  * Output: USD 12.00 / 1,000,000 tokens (`mul(0.00001200)`)\n* **Gemini 1.5 & 2.5 Flash:**\n  * Input: USD 0.075 / 1,000,000 tokens (`mul(0.000000075)`)\n  * Output: USD 0.30 / 1,000,000 tokens (`mul(0.00000030)`)\n* **Gemini 1.5 Pro:**\n  * Input: USD 1.25 / 1,000,000 tokens (`mul(0.00000125)`)\n  * Output: USD 5.00 / 1,000,000 tokens (`mul(0.00000500)`)\n\n*Disclaimer: These calculations are for monitoring and tracking estimates only and do not reflect exact final Google Cloud billing invoices.*\n\n**Note on Timeframes:** The \"Total Estimated Cost (USD) by Model & Type\" table is fully dynamic and responsive to the selected dashboard timeframe window. It uses the `outputFullDuration` option in combination with the `${__interval}` dynamic range vector to aggregate the estimated USD cost over the exact time frame you select in the dashboard's top-right time picker (e.g., Last 1 hour, Last 6 hours, Last 7 days).",
+          "format": "MARKDOWN"
+        }
+      },
+      {
+        "title": "Real-Time Estimated Cost (USD) by Model & Type (Over Time) [ESTIMATED COSTS]",
+        "xyChart": {
+          "dataSets": [
+            {
+              "timeSeriesQuery": {
+                "prometheusQuery": "(sum(increase(aiplatform_googleapis_com:publisher_online_serving_token_count{model_user_id=\"gemini-3.5-flash\", type=\"input\"}[1m])) by (model_user_id, type) * 0.00000150) or\n(sum(increase(aiplatform_googleapis_com:publisher_online_serving_token_count{model_user_id=\"gemini-3.5-flash\", type=\"output\"}[1m])) by (model_user_id, type) * 0.00000900) or\n(sum(increase(aiplatform_googleapis_com:publisher_online_serving_token_count{model_user_id=\"gemini-3.1-pro\", type=\"input\"}[1m])) by (model_user_id, type) * 0.00000200) or\n(sum(increase(aiplatform_googleapis_com:publisher_online_serving_token_count{model_user_id=\"gemini-3.1-pro\", type=\"output\"}[1m])) by (model_user_id, type) * 0.00001200) or\n(sum(increase(aiplatform_googleapis_com:publisher_online_serving_token_count{model_user_id=\"gemini-1.5-flash\", type=\"input\"}[1m])) by (model_user_id, type) * 0.000000075) or\n(sum(increase(aiplatform_googleapis_com:publisher_online_serving_token_count{model_user_id=\"gemini-1.5-flash\", type=\"output\"}[1m])) by (model_user_id, type) * 0.00000030) or\n(sum(increase(aiplatform_googleapis_com:publisher_online_serving_token_count{model_user_id=\"gemini-1.5-pro\", type=\"input\"}[1m])) by (model_user_id, type) * 0.00000125) or\n(sum(increase(aiplatform_googleapis_com:publisher_online_serving_token_count{model_user_id=\"gemini-1.5-pro\", type=\"output\"}[1m])) by (model_user_id, type) * 0.00000500) or\n(sum(increase(aiplatform_googleapis_com:publisher_online_serving_token_count{model_user_id=\"gemini-2.5-flash\", type=\"input\"}[1m])) by (model_user_id, type) * 0.000000075) or\n(sum(increase(aiplatform_googleapis_com:publisher_online_serving_token_count{model_user_id=\"gemini-2.5-flash\", type=\"output\"}[1m])) by (model_user_id, type) * 0.00000030)"
+              },
+              "plotType": "LINE",
+              "targetAxis": "Y1"
+            }
+          ],
+          "yAxis": {
+            "label": "Estimated Cost (USD) / Minute",
+            "scale": "LINEAR"
+          }
+        }
+      },
+      {
+        "title": "Total Estimated Cost (USD) by Model & Type (Selected Timeframe) [ESTIMATED COSTS]",
+        "timeSeriesTable": {
+          "dataSets": [
+            {
+              "timeSeriesQuery": {
+                "prometheusQuery": "label_replace(\n  (sum(increase(aiplatform_googleapis_com:publisher_online_serving_token_count{model_user_id=\"gemini-3.5-flash\", type=\"input\"}[${__interval}])) by (model_user_id, type) * 0.00000150) or\n  (sum(increase(aiplatform_googleapis_com:publisher_online_serving_token_count{model_user_id=\"gemini-3.5-flash\", type=\"output\"}[${__interval}])) by (model_user_id, type) * 0.00000900) or\n  (sum(increase(aiplatform_googleapis_com:publisher_online_serving_token_count{model_user_id=\"gemini-3.1-pro\", type=\"input\"}[${__interval}])) by (model_user_id, type) * 0.00000200) or\n  (sum(increase(aiplatform_googleapis_com:publisher_online_serving_token_count{model_user_id=\"gemini-3.1-pro\", type=\"output\"}[${__interval}])) by (model_user_id, type) * 0.00001200) or\n  (sum(increase(aiplatform_googleapis_com:publisher_online_serving_token_count{model_user_id=\"gemini-1.5-flash\", type=\"input\"}[${__interval}])) by (model_user_id, type) * 0.000000075) or\n  (sum(increase(aiplatform_googleapis_com:publisher_online_serving_token_count{model_user_id=\"gemini-1.5-flash\", type=\"output\"}[${__interval}])) by (model_user_id, type) * 0.00000030) or\n  (sum(increase(aiplatform_googleapis_com:publisher_online_serving_token_count{model_user_id=\"gemini-1.5-pro\", type=\"input\"}[${__interval}])) by (model_user_id, type) * 0.00000125) or\n  (sum(increase(aiplatform_googleapis_com:publisher_online_serving_token_count{model_user_id=\"gemini-1.5-pro\", type=\"output\"}[${__interval}])) by (model_user_id, type) * 0.00000500) or\n  (sum(increase(aiplatform_googleapis_com:publisher_online_serving_token_count{model_user_id=\"gemini-2.5-flash\", type=\"input\"}[${__interval}])) by (model_user_id, type) * 0.000000075) or\n  (sum(increase(aiplatform_googleapis_com:publisher_online_serving_token_count{model_user_id=\"gemini-2.5-flash\", type=\"output\"}[${__interval}])) by (model_user_id, type) * 0.00000030),\n  \"currency\", \"USD\", \"model_user_id\", \".*\"\n)",
+                "outputFullDuration": true
+              }
+            }
+          ],
+          "metricVisualization": "NUMBER"
+        }
+      }
+    ]
+  }
+}

@@ -1,0 +1,18 @@
+# Python caches
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Environment
+.envrc
+.venv
+venv/
+env/
+ENV/
+
+# OS and Editors
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
