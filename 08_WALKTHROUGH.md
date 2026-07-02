@@ -38,6 +38,35 @@ The serverless, native integration described in `HOW_TO_COLLECT_USER_DATA.md` ha
 
 ---
 
+### 4. Verify Gemini 3.5 Flash on the Global Endpoint
+We successfully verified that the client harness calling `gemini-3.5-flash` uses Vertex AI's **global endpoint** (representing multi-region/global routing). 
+
+1.  **Global Endpoint Client Verification**:
+    Configured the `google-genai` Python client with `location="global"` and successfully executed inference:
+    ```bash
+    $ python3 test_global_35.py
+    Initializing google-genai Client with vertexai=True, project=coffee-and-codey, location=global...
+    Calling generate_content on model=gemini-3.5-flash...
+    Response received successfully!
+    Response text: OK, Gemini.
+    Usage Metadata:
+      Prompt tokens: 10
+      Candidates tokens: 4
+      Total tokens: 152
+    ```
+2.  **Platform Configuration (PublisherModelConfig)**:
+    Registered native request-response logging on the global endpoint via direct REST call to `aiplatform.googleapis.com`:
+    ```bash
+    curl -X POST \
+      -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+      -H "Content-Type: application/json; charset=utf-8" \
+      -d @request.json \
+      "https://aiplatform.googleapis.com/v1beta1/projects/coffee-and-codey/locations/global/publishers/google/models/gemini-3.5-flash:setPublisherModelConfig"
+    ```
+    This configured the `global` region platform layer to direct all `gemini-3.5-flash` telemetry into the project's central OpenTelemetry streams and BigQuery tables!
+
+---
+
 ## 🏁 Verification Script Execution Proof
 
 ```bash
