@@ -34,7 +34,7 @@ If Native Logging (Option 2) is active, the first operand returns data and is di
 *   **Widget Type**: `xyChart` (Line)
 *   **PromQL Query**:
     ```promql
-    sum(rate(logging_googleapis_com:user_user_tokens_sum[1m])) by (user_id) or sum(rate(logging_googleapis_com:user_user_tokens[1m])) by (user_id)
+    sum(rate(logging_googleapis_com:user_user_tokens_sum{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[1m])) by (user_id) or sum(rate(logging_googleapis_com:user_user_tokens{monitored_resource="audited_resource"}[1m])) by (user_id)
     ```
 *   **Axes & Legend**:
     *   Title: `"Token Consumption (or Requests) by User (Over Time)"`
@@ -44,7 +44,7 @@ If Native Logging (Option 2) is active, the first operand returns data and is di
 *   **Widget Type**: `xyChart` (Stacked Bar)
 *   **PromQL Query**:
     ```promql
-    sum(increase(logging_googleapis_com:user_user_tokens_sum[1m])) by (user_id) or sum(increase(logging_googleapis_com:user_user_tokens[1m])) by (user_id)
+    sum(increase(logging_googleapis_com:user_user_tokens_sum{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[1m])) by (user_id) or sum(increase(logging_googleapis_com:user_user_tokens{monitored_resource="audited_resource"}[1m])) by (user_id)
     ```
 *   **Axes & Legend**:
     *   Title: `"Total Tokens (or Requests) Consumed per User"`
@@ -54,7 +54,7 @@ If Native Logging (Option 2) is active, the first operand returns data and is di
 *   **Widget Type**: `xyChart` (Line)
 *   **PromQL Query**:
     ```promql
-    sum(rate(logging_googleapis_com:user_user_tokens_count[1m])) by (user_id) or sum(rate(logging_googleapis_com:user_user_tokens[1m])) by (user_id)
+    sum(rate(logging_googleapis_com:user_user_tokens_count{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[1m])) by (user_id) or sum(rate(logging_googleapis_com:user_user_tokens{monitored_resource="audited_resource"}[1m])) by (user_id)
     ```
 *   **Axes & Legend**:
     *   Title: `"API Request Count by User (Rate)"`
@@ -64,7 +64,7 @@ If Native Logging (Option 2) is active, the first operand returns data and is di
 *   **Widget Type**: `xyChart` (Stacked Bar)
 *   **PromQL Query**:
     ```promql
-    sum(increase(logging_googleapis_com:user_user_tokens_sum[1m])) by (user_id, model_id) or sum(increase(logging_googleapis_com:user_user_tokens[1m])) by (user_id, model_id)
+    sum(increase(logging_googleapis_com:user_user_tokens_sum{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[1m])) by (user_id, model_id) or sum(increase(logging_googleapis_com:user_user_tokens{monitored_resource="audited_resource"}[1m])) by (user_id, model_id)
     ```
 *   **Axes & Legend**:
     *   Title: `"Model Types Utilized by User"`
@@ -74,7 +74,7 @@ If Native Logging (Option 2) is active, the first operand returns data and is di
 *   **Widget Type**: `timeSeriesTable` with `"outputFullDuration": true`
 *   **PromQL Query**:
     ```promql
-    sum(increase(logging_googleapis_com:user_user_tokens_sum[${__interval}])) by (user_id, model_id) or sum(increase(logging_googleapis_com:user_user_tokens[${__interval}])) by (user_id, model_id)
+    sum(increase(logging_googleapis_com:user_user_tokens_sum{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[${__interval}])) by (user_id, model_id) or sum(increase(logging_googleapis_com:user_user_tokens{monitored_resource="audited_resource"}[${__interval}])) by (user_id, model_id)
     ```
 *   **Settings**: `"outputFullDuration": true` aggregates the cumulative sums exactly over the active selected dashboard window (e.g. Last 7 Days, Last 1 Hour).
 

@@ -46,9 +46,9 @@ By leveraging PromQL's logical `or` fallback operator, we can design a single da
 
 1.  **Token/Request Rate over Time (Widget 2)**:
     ```promql
-    sum(rate(logging_googleapis_com:user_user_tokens_sum[1m])) by (user_id) 
+    sum(rate(logging_googleapis_com:user_user_tokens_sum{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[1m])) by (user_id) 
     or 
-    sum(rate(logging_googleapis_com:user_user_tokens[1m])) by (user_id)
+    sum(rate(logging_googleapis_com:user_user_tokens{monitored_resource="audited_resource"}[1m])) by (user_id)
     ```
     *   *If Option 2 is deployed*: Renders actual token rate (Tokens/Second).
     *   *If Option 1 is deployed*: Renders request rate (Requests/Second).
@@ -56,38 +56,38 @@ By leveraging PromQL's logical `or` fallback operator, we can design a single da
 
 2.  **Total Consumed per User (Widget 3 - Stacked Bar)**:
     ```promql
-    sum(increase(logging_googleapis_com:user_user_tokens_sum[1m])) by (user_id) 
+    sum(increase(logging_googleapis_com:user_user_tokens_sum{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[1m])) by (user_id) 
     or 
-    sum(increase(logging_googleapis_com:user_user_tokens[1m])) by (user_id)
+    sum(increase(logging_googleapis_com:user_user_tokens{monitored_resource="audited_resource"}[1m])) by (user_id)
     ```
 
 3.  **API Requests count by User (Widget 4 - Line)**:
     ```promql
-    sum(rate(logging_googleapis_com:user_user_tokens_count[1m])) by (user_id) 
+    sum(rate(logging_googleapis_com:user_user_tokens_count{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[1m])) by (user_id) 
     or 
-    sum(rate(logging_googleapis_com:user_user_tokens[1m])) by (user_id)
+    sum(rate(logging_googleapis_com:user_user_tokens{monitored_resource="audited_resource"}[1m])) by (user_id)
     ```
 
 4.  **Model Types Utilized by User (Widget 5 - Stacked Bar)**:
     ```promql
-    sum(increase(logging_googleapis_com:user_user_tokens_sum[1m])) by (user_id, model_id) 
+    sum(increase(logging_googleapis_com:user_user_tokens_sum{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[1m])) by (user_id, model_id) 
     or 
-    sum(increase(logging_googleapis_com:user_user_tokens[1m])) by (user_id, model_id)
+    sum(increase(logging_googleapis_com:user_user_tokens{monitored_resource="audited_resource"}[1m])) by (user_id, model_id)
     ```
 
 5.  **Total Tokens/Requests per User per Model (Widget 6 - Table Summary)**:
     We'll configure `"outputFullDuration": true` inside the chart and use the dynamic `${__interval}` range:
     ```promql
-    sum(increase(logging_googleapis_com:user_user_tokens_sum[${__interval}])) by (user_id, model_id) 
+    sum(increase(logging_googleapis_com:user_user_tokens_sum{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[${__interval}])) by (user_id, model_id) 
     or 
-    sum(increase(logging_googleapis_com:user_user_tokens[${__interval}])) by (user_id, model_id)
+    sum(increase(logging_googleapis_com:user_user_tokens{monitored_resource="audited_resource"}[${__interval}])) by (user_id, model_id)
     ```
 
 6.  **Total Invocations/Tokens by Model (Widget 7 - Stacked Bar)**:
     ```promql
-    sum(increase(logging_googleapis_com:user_user_tokens_sum[1m])) by (model_id) 
+    sum(increase(logging_googleapis_com:user_user_tokens_sum{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[1m])) by (model_id) 
     or 
-    sum(increase(logging_googleapis_com:user_user_tokens[1m])) by (model_id)
+    sum(increase(logging_googleapis_com:user_user_tokens{monitored_resource="audited_resource"}[1m])) by (model_id)
     ```
 
 ---
