@@ -14,7 +14,7 @@
 
 name: "user_tokens"
 description: "User requests tracker from Audit Logs for GEAP Dashboard v2"
-filter: 'logName:"cloudaudit.googleapis.com%2Fdata_access" AND protoPayload.serviceName="aiplatform.googleapis.com" AND (protoPayload.methodName:"generateContent" OR protoPayload.methodName:"predict")'
+filter: 'logName:"cloudaudit.googleapis.com%2Fdata_access" AND protoPayload.serviceName="aiplatform.googleapis.com" AND (protoPayload.methodName:"GenerateContent" OR protoPayload.methodName:"Predict")'
 metricDescriptor:
   metricKind: "DELTA"
   valueType: "INT64"

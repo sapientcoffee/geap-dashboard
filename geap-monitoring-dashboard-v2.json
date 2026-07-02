@@ -1,96 +1,66 @@
 {
   "displayName": "Developer AI Tools: User Token Tracker",
-  "etag": "2f7d8836b5e7a14c3c22cdc5cbd9f559",
+  "etag": "193d6624cb0adb2a9a40cc2239740823",
   "gridLayout": {
     "columns": "2",
     "widgets": [
       {
         "title": "Dashboard Overview & Setup Guide",
         "text": {
-          "content": "# ☕ Developer AI Tools: User Token Tracker\n\nThis specialized dashboard provides fine-grained, developer-level observability. It answers critical questions about **who** is calling which Gemini models, **how** frequently, and the specific consumption patterns of individual developers.\n\n### ⚙️ Why is this dashboard empty by default?\nBecause `agy` and other developer CLI tools run locally on workstations, their network calls communicate directly with the Vertex AI service. **These calls do not automatically write application-level logs into Google Cloud Logging.** To populate this dashboard, you must choose one of the following two standard patterns:\n\n* **Option 1: No-Code Audit Logs (Request Counts)**\n  Vertex AI Data Access Audit Logs are enabled in your project (`aiplatform.googleapis.com`). Our custom `user_tokens` metric parses these audit logs to extract the developer's email (`user_id`) and model (`model_id`). This tracks request counts but not exact token sizes (due to log privacy).\n  * **Troubleshooting:** If no data is shown, verify that your local CLI tool is fully authenticated using a Google Cloud account (e.g., via standard ADC or OAuth) rather than an AI Studio API key, and that you have `Private Logs Viewer` IAM permissions to view data access audit logs.\n\n* **Option 2: Lightweight Proxy (Exact Token Counts) 💎 [RECOMMENDED]**\n  Deploy our pre-built Cloud Run logging proxy. By setting `export VERTEX_API_ENDPOINT=\"https://your-proxy.a.run.app\"`, local CLI tools route traffic through the proxy, which logs the exact input, output, and cached token sizes for every developer. It is secure, private, and gives 100% precise token tracking!\n\n*See [USER_AND_USAGE_TRACKING_GUIDE.md](USER_AND_USAGE_TRACKING_GUIDE.md) and [HOW_TO_COLLECT_USER_DATA.md](HOW_TO_COLLECT_USER_DATA.md) for full deployment steps.*",
+          "content": "# ☕ Developer AI Tools: User Token Tracker\n\nThis specialized dashboard provides fine-grained, developer-level observability. It answers critical questions about **who** is calling which Gemini models, **how** frequently, and the specific consumption patterns of individual developers.\n\n### ⚙️ Why is this dashboard empty by default?\nBecause `agy` and other developer CLI tools run locally on workstations, their network calls communicate directly with the Vertex AI service. **These calls do not automatically write application-level logs into Google Cloud Logging.** To populate this dashboard, you must choose one of the following two standard patterns:\n\n* **Option 1: No-Code Audit Logs (Request Counts)**\n  Vertex AI Data Access Audit Logs are enabled in your project (`aiplatform.googleapis.com`). Our custom `user_tokens` metric parses these audit logs to extract the developer's email (`user_id`) and model (`model_id`). This tracks request counts but not exact token sizes (due to log privacy).\n  * **Troubleshooting:** If no data is shown, verify that your local CLI tool is fully authenticated using a Google Cloud account (e.g., via standard ADC or OAuth) rather than an AI Studio API key, and that you have `Private Logs Viewer` IAM permissions to view data access audit logs.\n\n* **Option 2: Native Request-Response Logging (Exact Token Counts) 💎 [RECOMMENDED]**\n  Enable native request-response logging directly on base models via `PublisherModelConfig`. Every request automatically writes unredacted payload logs to BigQuery and OpenTelemetry without custom proxy servers, enforcing 100% GCP IAM pre-auth authentication for tools like `agy` and `GeminiCLI` with zero bypass risk!\n\n*See [USER_AND_USAGE_TRACKING_GUIDE.md](USER_AND_USAGE_TRACKING_GUIDE.md) and [HOW_TO_COLLECT_USER_DATA.md](HOW_TO_COLLECT_USER_DATA.md) for full deployment steps.*",
           "format": "MARKDOWN"
         }
       },
       {
-        "title": "Token Consumption by User (Over Time)",
+        "title": "Token Consumption (or Requests) by User (Over Time)",
         "xyChart": {
           "dataSets": [
             {
               "timeSeriesQuery": {
-                "timeSeriesFilter": {
-                  "filter": "metric.type=\"logging.googleapis.com/user/user_tokens\"",
-                  "aggregation": {
-                    "alignmentPeriod": "60s",
-                    "perSeriesAligner": "ALIGN_RATE",
-                    "crossSeriesReducer": "REDUCE_SUM",
-                    "groupByFields": [
-                      "metric.label.user_id"
-                    ]
-                  }
-                }
+                "prometheusQuery": "sum(rate(logging_googleapis_com:user_user_tokens_sum{monitored_resource=\"aiplatform.googleapis.com/PublisherModel\"}[1m])) by (user_id)"
               },
               "plotType": "LINE",
               "targetAxis": "Y1"
             }
           ],
           "yAxis": {
-            "label": "Tokens / Second (Rate)",
+            "label": "Rate / Second",
             "scale": "LINEAR"
           }
         }
       },
       {
-        "title": "Total Tokens Consumed per User",
+        "title": "Total Tokens (or Requests) Consumed per User",
         "xyChart": {
           "dataSets": [
             {
               "timeSeriesQuery": {
-                "timeSeriesFilter": {
-                  "filter": "metric.type=\"logging.googleapis.com/user/user_tokens\"",
-                  "aggregation": {
-                    "alignmentPeriod": "60s",
-                    "perSeriesAligner": "ALIGN_SUM",
-                    "crossSeriesReducer": "REDUCE_SUM",
-                    "groupByFields": [
-                      "metric.label.user_id"
-                    ]
-                  }
-                }
+                "prometheusQuery": "sum(increase(logging_googleapis_com:user_user_tokens_sum{monitored_resource=\"aiplatform.googleapis.com/PublisherModel\"}[1m])) by (user_id)"
               },
               "plotType": "STACKED_BAR",
               "targetAxis": "Y1"
             }
           ],
           "yAxis": {
-            "label": "Total Tokens",
+            "label": "Total Count (Tokens or Requests)",
             "scale": "LINEAR"
           }
         }
       },
       {
-        "title": "API Requests count by User",
+        "title": "API Request Count by User (Rate)",
         "xyChart": {
           "dataSets": [
             {
               "timeSeriesQuery": {
-                "timeSeriesFilter": {
-                  "filter": "metric.type=\"logging.googleapis.com/user/user_tokens\"",
-                  "aggregation": {
-                    "alignmentPeriod": "60s",
-                    "perSeriesAligner": "ALIGN_COUNT",
-                    "crossSeriesReducer": "REDUCE_SUM",
-                    "groupByFields": [
-                      "metric.label.user_id"
-                    ]
-                  }
-                }
+                "prometheusQuery": "sum(rate(logging_googleapis_com:user_user_tokens_count{monitored_resource=\"aiplatform.googleapis.com/PublisherModel\"}[1m])) by (user_id)"
               },
               "plotType": "LINE",
               "targetAxis": "Y1"
             }
           ],
           "yAxis": {
-            "label": "Requests / Minute",
+            "label": "Requests / Second",
             "scale": "LINEAR"
           }
         }
@@ -101,47 +71,26 @@
           "dataSets": [
             {
               "timeSeriesQuery": {
-                "timeSeriesFilter": {
-                  "filter": "metric.type=\"logging.googleapis.com/user/user_tokens\"",
-                  "aggregation": {
-                    "alignmentPeriod": "60s",
-                    "perSeriesAligner": "ALIGN_SUM",
-                    "crossSeriesReducer": "REDUCE_SUM",
-                    "groupByFields": [
-                      "metric.label.user_id",
-                      "metric.label.model_id"
-                    ]
-                  }
-                }
+                "prometheusQuery": "sum(increase(logging_googleapis_com:user_user_tokens_sum{monitored_resource=\"aiplatform.googleapis.com/PublisherModel\"}[1m])) by (user_id, model_id)"
               },
               "plotType": "STACKED_BAR",
               "targetAxis": "Y1"
             }
           ],
           "yAxis": {
-            "label": "Tokens",
+            "label": "Total Count (Tokens or Requests)",
             "scale": "LINEAR"
           }
         }
       },
       {
-        "title": "Total Tokens/Requests Consumed per User per Model (Tabular Summary)",
+        "title": "Total Tokens (or Requests) Consumed per User per Model (Table Summary)",
         "timeSeriesTable": {
           "dataSets": [
             {
               "timeSeriesQuery": {
-                "timeSeriesFilter": {
-                  "filter": "metric.type=\"logging.googleapis.com/user/user_tokens\"",
-                  "aggregation": {
-                    "alignmentPeriod": "60s",
-                    "perSeriesAligner": "ALIGN_SUM",
-                    "crossSeriesReducer": "REDUCE_SUM",
-                    "groupByFields": [
-                      "metric.label.user_id",
-                      "metric.label.model_id"
-                    ]
-                  }
-                }
+                "prometheusQuery": "sum(increase(logging_googleapis_com:user_user_tokens_sum{monitored_resource=\"aiplatform.googleapis.com/PublisherModel\"}[${__interval}])) by (user_id, model_id)",
+                "outputFullDuration": true
               }
             }
           ],
@@ -149,29 +98,19 @@
         }
       },
       {
-        "title": "Total Invocations/Tokens by Model (All Users)",
+        "title": "Total Tokens (or Requests) Consumed by Model (All Users)",
         "xyChart": {
           "dataSets": [
             {
               "timeSeriesQuery": {
-                "timeSeriesFilter": {
-                  "filter": "metric.type=\"logging.googleapis.com/user/user_tokens\"",
-                  "aggregation": {
-                    "alignmentPeriod": "60s",
-                    "perSeriesAligner": "ALIGN_SUM",
-                    "crossSeriesReducer": "REDUCE_SUM",
-                    "groupByFields": [
-                      "metric.label.model_id"
-                    ]
-                  }
-                }
+                "prometheusQuery": "sum(increase(logging_googleapis_com:user_user_tokens_sum{monitored_resource=\"aiplatform.googleapis.com/PublisherModel\"}[1m])) by (model_id)"
               },
               "plotType": "STACKED_BAR",
               "targetAxis": "Y1"
             }
           ],
           "yAxis": {
-            "label": "Total Count / Tokens",
+            "label": "Total Count (Tokens or Requests)",
             "scale": "LINEAR"
           }
         }

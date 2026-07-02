@@ -107,36 +107,34 @@ gcloud monitoring dashboards create \
 
 To feed user-level metrics into the **Developer AI Tools: User Token Tracker** dashboard, the system queries a custom logs-based metric named **`user_tokens`**.
 
-We have pre-configured and provided two ready-to-use YAML definitions for this metric, and **Solution A1 (No-Code Audit Logs) is already deployed and active** in your project!
+We have pre-configured and provided two ready-to-use YAML definitions for this metric, and **Solution A2 (Native Request-Response Logging) is already deployed and active** in your project!
 
 ---
 
-### ⚡ Solution A1: No-Code Audit Logs (Request Counts) - *DEPLOYED & ACTIVE!*
-*   **What it does**: Automatically tracks developer request counts and model selections by intercepting Vertex AI API activity logs. No code changes or local CLI configurations are required!
-*   **Deployment Status**: **Successfully deployed to your project `coffee-and-codey`!**
-*   **Configuration File**: [user-tokens-audit-log.yaml](user-tokens-audit-log.yaml)
-*   **How it was deployed**:
-    ```bash
-    # Enables auditing on Vertex AI API and registers the metric
-    gcloud logging metrics create user_tokens --config-from-file=user-tokens-audit-log.yaml
-    ```
-*   **Verification**: Run local `agy` or `GeminiCLI` commands. The audit logs will automatically populate your Dashboard v2 within a few minutes!
-
----
-
-### 💎 Solution A2: Central Logging Proxy (Exact Token Tracking)
-*   **What it does**: Tracks exact input, output, and cached token sizes per developer by routing local requests through a lightweight central proxy.
+### 💎 Solution A2: Native Request-Response Logging (Exact Token Counts) - *DEPLOYED & ACTIVE!*
+*   **What it does**: Tracks exact input, output, and cached token sizes per developer natively inside Google Cloud's infrastructure, using `PublisherModelConfig` with **zero custom proxy servers to manage** and **100% pre-auth enforcement**!
+*   **Deployment Status**: **Successfully deployed and active on `gemini-2.5-flash` (region `us-central1`) and `gemini-3.5-flash` (location `global`) in project `coffee-and-codey`!**
 *   **Configuration File**: [user-tokens-proxy.yaml](user-tokens-proxy.yaml)
-*   **How to Set Up**:
-    1. Deploy the central Python/FastAPI proxy on Cloud Run (detailed code in [HOW_TO_COLLECT_USER_DATA.md](HOW_TO_COLLECT_USER_DATA.md)).
-    2. Transition your `user_tokens` metric to the distribution schema:
+*   **How it was deployed**:
+    1. Native `PublisherModelConfig` was registered for `gemini-2.5-flash` in region `us-central1`, and for `gemini-3.5-flash` using `location="global"` and the global multi-region endpoint.
+    2. The `user_tokens` custom log-based metric was configured with the distribution schema:
        ```bash
        gcloud logging metrics update user_tokens --config-from-file=user-tokens-proxy.yaml
        ```
-    3. Configure local developer machines to route calls through your proxy:
-       ```bash
-       export VERTEX_API_ENDPOINT="https://your-cloud-run-proxy-xxxxx.a.run.app"
-       ```
+*   **Developer Environment Setup**: Developers must ensure that local environments have no legacy proxy endpoint overrides (remove/unset `VERTEX_API_ENDPOINT`) and are logged in natively using standard Application Default Credentials:
+    ```bash
+    gcloud auth application-default login
+    ```
+
+---
+
+### ⚡ Solution A1: No-Code Audit Logs (Request Counts) - *Alternative Fallback*
+*   **What it does**: Tracks developer request counts (as an alternative fallback) by intercepting Vertex AI API activity audit logs. This tracks request frequencies but cannot extract exact token volumes due to audit privacy rules.
+*   **Configuration File**: [user-tokens-audit-log.yaml](user-tokens-audit-log.yaml)
+*   **How to fallback**: To transition back to tracking request counts, update the `user_tokens` metric:
+    ```bash
+    gcloud logging metrics update user_tokens --config-from-file=user-tokens-audit-log.yaml
+    ```
 
 ---
 
