@@ -60,6 +60,12 @@ SELECT
   -- Financial Calculation (using standard list rates)
   ROUND(
     CASE 
+      WHEN log.model LIKE "%gemini-3.5-flash%" THEN 
+        (CAST(JSON_EXTRACT(log.full_response, "$.usageMetadata.promptTokenCount") AS FLOAT64) * 0.00000150) + 
+        (CAST(JSON_EXTRACT(log.full_response, "$.usageMetadata.candidatesTokenCount") AS FLOAT64) * 0.00000900)
+      WHEN log.model LIKE "%gemini-3.1-pro%" THEN 
+        (CAST(JSON_EXTRACT(log.full_response, "$.usageMetadata.promptTokenCount") AS FLOAT64) * 0.00000200) + 
+        (CAST(JSON_EXTRACT(log.full_response, "$.usageMetadata.candidatesTokenCount") AS FLOAT64) * 0.00001200)
       WHEN log.model LIKE "%gemini-2.5-flash%" THEN 
         (CAST(JSON_EXTRACT(log.full_response, "$.usageMetadata.promptTokenCount") AS FLOAT64) * 0.000000075) + 
         (CAST(JSON_EXTRACT(log.full_response, "$.usageMetadata.candidatesTokenCount") AS FLOAT64) * 0.00000030)

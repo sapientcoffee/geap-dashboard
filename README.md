@@ -113,10 +113,10 @@ We have pre-configured and provided two ready-to-use YAML definitions for this m
 
 ### 💎 Solution A2: Native Request-Response Logging (Exact Token Counts) - *DEPLOYED & ACTIVE!*
 *   **What it does**: Tracks exact input, output, and cached token sizes per developer natively inside Google Cloud's infrastructure, using `PublisherModelConfig` with **zero custom proxy servers to manage** and **100% pre-auth enforcement**!
-*   **Deployment Status**: **Successfully deployed and active on `gemini-2.5-flash` in project `coffee-and-codey`!**
+*   **Deployment Status**: **Successfully deployed and active on `gemini-2.5-flash` (region `us-central1`) and `gemini-3.5-flash` (location `global`) in project `coffee-and-codey`!**
 *   **Configuration File**: [user-tokens-proxy.yaml](user-tokens-proxy.yaml)
 *   **How it was deployed**:
-    1. Native `PublisherModelConfig` was registered for `gemini-2.5-flash` in region `us-central1`.
+    1. Native `PublisherModelConfig` was registered for `gemini-2.5-flash` in region `us-central1`, and for `gemini-3.5-flash` using `location="global"` and the global multi-region endpoint.
     2. The `user_tokens` custom log-based metric was configured with the distribution schema:
        ```bash
        gcloud logging metrics update user_tokens --config-from-file=user-tokens-proxy.yaml

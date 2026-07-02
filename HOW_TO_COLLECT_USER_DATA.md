@@ -36,14 +36,26 @@ Create a file named `request.json` with the following configuration (replace `{P
 }
 ```
 
-Then run the following `curl` command to register the model configuration in region `us-central1` (or your target region):
-```bash
-curl -X POST \
-  -H "Authorization: Bearer $(gcloud auth print-access-token)" \
-  -H "Content-Type: application/json; charset=utf-8" \
-  -d @request.json \
-  "https://us-central1-aiplatform.googleapis.com/v1beta1/projects/{PROJECT_ID}/locations/us-central1/publishers/google/models/gemini-2.5-flash:setPublisherModelConfig"
-```
+Then run the `curl` command corresponding to your model's endpoint type:
+
+* **For Regional Models (e.g., `gemini-2.5-flash` in `us-central1`)**:
+  ```bash
+  curl -X POST \
+    -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+    -H "Content-Type: application/json; charset=utf-8" \
+    -d @request.json \
+    "https://us-central1-aiplatform.googleapis.com/v1beta1/projects/{PROJECT_ID}/locations/us-central1/publishers/google/models/gemini-2.5-flash:setPublisherModelConfig"
+  ```
+
+* **For Global Models (e.g., `gemini-3.5-flash` on the Global Endpoint)**:
+  Use the global `aiplatform.googleapis.com` API domain and specify location `global`:
+  ```bash
+  curl -X POST \
+    -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+    -H "Content-Type: application/json; charset=utf-8" \
+    -d @request.json \
+    "https://aiplatform.googleapis.com/v1beta1/projects/{PROJECT_ID}/locations/global/publishers/google/models/gemini-3.5-flash:setPublisherModelConfig"
+  ```
 
 #### Pattern B: Via Python SDK (Vertex AI Preview)
 Run this Python snippet inside your environment:
@@ -52,13 +64,20 @@ import vertexai
 from vertexai.preview.generative_models import GenerativeModel
 
 PROJECT_ID = "coffee-and-codey"
-LOCATION = "us-central1"
+
+# For standard regional models:
+# LOCATION = "us-central1"
+# MODEL_NAME = "gemini-2.5-flash"
+
+# For global models:
+LOCATION = "global"
+MODEL_NAME = "gemini-3.5-flash"
 
 # Initialize Vertex AI SDK
 vertexai.init(project=PROJECT_ID, location=LOCATION)
 
 # Initialize target base foundation model
-model = GenerativeModel("gemini-2.5-flash")
+model = GenerativeModel(MODEL_NAME)
 
 # Enable native logging to BigQuery and OpenTelemetry
 model.set_request_response_logging_config(
@@ -67,7 +86,7 @@ model.set_request_response_logging_config(
     bigquery_destination=f"bq://{PROJECT_ID}.vertex_logs.request_response_logs",
     enable_otel_logging=True
 )
-print("Native request-response logging successfully configured!")
+print(f"Native request-response logging successfully configured for {MODEL_NAME} on {LOCATION}!")
 ```
 
 ---
