@@ -124,19 +124,20 @@ We have pre-configured and provided two ready-to-use YAML definitions for this m
 
 ---
 
-### 💎 Solution A2: Central Logging Proxy (Exact Token Tracking)
-*   **What it does**: Tracks exact input, output, and cached token sizes per developer by routing local requests through a lightweight central proxy.
+### 💎 Solution A2: Native Request-Response Logging (Exact Token Counts)
+*   **What it does**: Tracks exact input, output, and cached token sizes per developer natively inside Google Cloud's infrastructure, using `PublisherModelConfig` with **zero custom proxy servers to manage** and **100% pre-auth enforcement**!
 *   **Configuration File**: [user-tokens-proxy.yaml](user-tokens-proxy.yaml)
 *   **How to Set Up**:
-    1. Deploy the central Python/FastAPI proxy on Cloud Run (detailed code in [HOW_TO_COLLECT_USER_DATA.md](HOW_TO_COLLECT_USER_DATA.md)).
+    1. Enable native request-response logging on base models using Python SDK or REST/curl as explained in [HOW_TO_COLLECT_USER_DATA.md](HOW_TO_COLLECT_USER_DATA.md).
     2. Transition your `user_tokens` metric to the distribution schema:
        ```bash
        gcloud logging metrics update user_tokens --config-from-file=user-tokens-proxy.yaml
        ```
-    3. Configure local developer machines to route calls through your proxy:
+    3. Ensure local developer environments are unconfigured from any legacy custom proxy variable:
        ```bash
-       export VERTEX_API_ENDPOINT="https://your-cloud-run-proxy-xxxxx.a.run.app"
+       unset VERTEX_API_ENDPOINT
        ```
+       Developers simply authenticate natively via `gcloud auth application-default login`.
 
 ---
 

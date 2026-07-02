@@ -13,9 +13,9 @@
 # limitations under the License.
 
 name: "user_tokens"
-description: "Exact token counts from central logging proxy for GEAP Dashboard v2"
-filter: '(resource.type="global" OR resource.type="cloud_run_revision") AND jsonPayload.event="gemini_call"'
-valueExtractor: 'EXTRACT(jsonPayload.totalTokens)'
+description: "Exact token counts from native OpenTelemetry logs for GEAP Dashboard v2"
+filter: 'resource.type="aiplatform.googleapis.com/PublisherModel" AND jsonPayload.body.name="gemini_call"'
+valueExtractor: 'EXTRACT(jsonPayload.body.totalTokens)'
 metricDescriptor:
   metricKind: "DELTA"
   valueType: "DISTRIBUTION"
@@ -23,13 +23,13 @@ metricDescriptor:
   labels:
     - key: "user_id"
       valueType: "STRING"
-      description: "The developer user ID"
+      description: "The authenticated developer user ID (email)"
     - key: "model_id"
       valueType: "STRING"
       description: "The model ID called"
 labelExtractors:
-  user_id: "EXTRACT(jsonPayload.userId)"
-  model_id: "EXTRACT(jsonPayload.modelId)"
+  user_id: "EXTRACT(jsonPayload.body.userId)"
+  model_id: "EXTRACT(jsonPayload.body.modelId)"
 bucketOptions:
   exponentialBuckets:
     growthFactor: 2.0

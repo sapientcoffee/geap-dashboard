@@ -2,46 +2,55 @@
 
 ## 1. Product Overview & Context
 
-This product consists of Developer AI Tools Monitoring Dashboards and custom log-based metric templates that provide team leads and platform administrators visibility into model invocations, token consumption, response speeds, cost, and rate-limit experiences of developers calling the Vertex AI/Agent Platform (GEAP) API.
+This product consists of Developer AI Tools Monitoring Dashboards and custom log-based metric templates that provide team leads and platform administrators visibility into model invocations, token consumption, response speeds, cost, and rate-limit experiences of developers calling the Vertex AI/Agent Platform (GEAP) API. 
+
+This update shifts the ingestion pattern of exact token usage from a custom logging proxy to **Native GEAP Request-Response Logging (via `PublisherModelConfig`)**, combining built-in Google Cloud IAM authentication with serverless log collection.
+
+---
 
 ## 2. Problem Statement
 
-While Dashboard v1 (Aggregate Cost & Usage) has been migrated to PromQL, Dashboard v2 (User Token Tracker) uses standard GCM filters with incompatible metrics and aggregation aligners, resulting in:
-1.  **Dashboard Crash**: If the lightweight proxy (Option 2) is used, the metric `user_tokens` is a `DISTRIBUTION`. Plotting a distribution metric on a standard line/bar chart using standard GCM filters and `ALIGN_RATE`/`ALIGN_SUM` crashes Google Cloud Monitoring.
-2.  **Misleading Displays**: If no-code audit logs (Option 1) are used, the metric is an `INT64` counter representing request counts. However, the charts display these counts on "Token Consumption" charts with "Tokens" as the axis units, leading users to believe they are consuming single-digit token amounts.
-3.  **Ambiguity & Potential Drift**: Small bugs and omissions in the configuration files (`user-tokens-proxy.yaml`, `user-tokens-audit-log.yaml`) and proxy documentation lead to operator precedence risks, case-sensitivity issues, and API mismatches.
+1.  **Dashboard Empty/Missing Data**: Standard local developer SDK or CLI (`agy`, `GeminiCLI`) calls directly query Vertex AI. Because Google Cloud does not natively write prompt payloads or token count metadata to standard Cloud Logging for privacy/security reasons, standard time-series dashboards are empty by default.
+2.  **Authentication & Security Bypass**: In custom proxy setups, developers can bypass the logging gateway entirely by unsetting environmental endpoints and calling the models directly. This circumvents corporate tracking. Additionally, any custom proxy middleware introduces security maintenance, authentication validation complexity, and additional Cloud Run compute costs.
+3.  **GCM Dashboard Crash Risks**: Plotting distribution metrics (like token counts) on standard GCM xyCharts without explicit scalar extraction causes dashboards to crash. We need robust PromQL query fallbacks to support both request volumes (from Audit Logs) and exact token consumption.
+
+---
 
 ## 3. Goals & Non-Goals
 
 ### Goals
-*   **Zero-Crash Dashboard v2**: Ensure Dashboard v2 renders 100% of the time, regardless of whether Option 1 (Audit log) or Option 2 (Proxy) is deployed.
-*   **Dynamic Fallback Support**: Build a single Dashboard v2 configuration file using PromQL that dynamically detects which metric schema is active (Proxy vs. Audit Logs), plotting exact token volumes if available, and gracefully falling back to request volumes otherwise.
-*   **Clear and Correct Labeling**: Clearly label axes and titles so that the viewer always understands whether they are seeing actual token counts or request counts.
-*   **Robust Configuration Templates**: Fix operator precedence and case-sensitivity issues in log-based metric templates.
-*   **Premium Proxy Reference Code**: Provide a clean, robust FastAPI template in `HOW_TO_COLLECT_USER_DATA.md` that correctly parses project/location and matches raw Vertex AI REST response payloads.
+*   **Zero-Bypass Native Authentication**: Enforce authentication and access control natively using **Google Cloud IAM**. Developers must be authenticated via local credentials (`gcloud auth application-default login`) before they can make any API calls.
+*   **Zero-Maintenance Ingestion**: Implement exact token tracking using GEAP's native **Request-Response Logging** (`PublisherModelConfig`), eliminating the need to compile, deploy, or pay for custom Cloud Run logging proxies.
+*   **Real-time & BigQuery Visibility**: Natively export exact request/response payloads (including prompt, output, and cached token sizes) to a BigQuery destination table and OpenTelemetry streams.
+*   **Zero-Crash Dashboard v2**: Ensure Dashboard v2 dynamically plots exact token volumes (via OTel/BigQuery extraction) when enabled, and gracefully falls back to request counts (via No-Code Audit Logs) otherwise.
+*   **Accurate Cost Auditing**: Allow administrators to run high-fidelity queries joining native audit logs (caller identity) with native payload logs (token counts) inside BigQuery for exact cost attribution.
 
 ### Non-Goals
-*   Deploying live cloud infrastructure automatically (we are maintaining the dashboard and metric templates).
-*   Rewriting Dashboard v1 (which is fully functional and migrated).
+*   Deploying live cloud infrastructure automatically (we maintain the dashboards, YAML configs, and setup documentation).
+*   Supporting unauthenticated public model endpoints (all access must go through Google Cloud IAM authentication).
+
+---
 
 ## 4. Key Personas & Target Users
 
-*   **Platform / DevOps Engineers**: Need robust, crash-free dashboards to monitor Developer AI API activity, predict rate limits, and isolate user-induced latency bottlenecks.
-*   **Engineering Leads & Budget Owners**: Need clear, accurate, and non-misleading visual data on token consumption and request distributions across team members to manage costs and allocate chargebacks.
+*   **Platform / DevOps Engineers**: Need standard, secure GCP-managed logging patterns to track Developer AI API activity with zero additional infrastructure or routing layers to manage.
+*   **Engineering Leads & Budget Owners**: Need clear, accurate reports on token consumption and costs per user to allocate budgets and handle monthly chargebacks.
+
+---
 
 ## 5. Requirements & Acceptance Criteria
 
 ### In-Scope
-*   **Dashboard v2 Migration**: Upgrade `geap-monitoring-dashboard-v2.json` to PromQL. Use PromQL's `or` logical fallback pattern to support both `DISTRIBUTION` and `INT64` metric schemas.
-*   **Metric Schema Adjustments**: Add explicit parentheses and update method cases in `user-tokens-proxy.yaml` and `user-tokens-audit-log.yaml` for maximum robustness.
-*   **Documentation Alignments**: Ensure `HOW_TO_COLLECT_USER_DATA.md` and `USER_AND_USAGE_TRACKING_GUIDE.md` describe the updated PromQL fallback behavior and fix proxy Python deficiencies.
+*   **Dashboard v2 PromQL Migration**: Maintain Dashboard v2 upgraded to PromQL with the `or` fallback scheme to natively support both scalar counters and distribution metrics.
+*   **Native Ingestion Documentation**: Rewrite `HOW_TO_COLLECT_USER_DATA.md` and `USER_AND_USAGE_TRACKING_GUIDE.md` to instruct administrators how to enable native `setPublisherModelConfig` and query the logs.
+*   **Metric Schema Hardening**: Ensure `user-tokens-proxy.yaml` matches the structured OpenTelemetry (OTel) output fields generated by Vertex AI native logging.
 
 ### Acceptance Criteria
 
 | ID | Requirement | Acceptance Criteria |
 | :--- | :--- | :--- |
 | **AC-1** | **No GCM Crashes** | Dashboard v2 renders cleanly with no errors when queried against a `DISTRIBUTION` metric schema (Option 2). |
-| **AC-2** | **Dynamic Fallback** | All charts on Dashboard v2 automatically display exact token metrics if `logging_googleapis_com:user_user_tokens_sum` exists, and automatically fall back to request volume metrics (`logging_googleapis_com:user_user_tokens`) if it does not. |
-| **AC-3** | **Transparent Labeling** | Every chart title and Y-axis label clearly indicates that it is plotting "Tokens (or Requests if using No-Code Audit Logs)" so the user is never misled. |
-| **AC-4** | **Config Robustness** | Ingestion templates are fully valid, include explicit logical grouping parentheses, and use correct case-sensitive gRPC method names. |
-| **AC-5** | **Proxy Reliability** | Python FastAPI code in `HOW_TO_COLLECT_USER_DATA.md` instantiates client dynamically with project/location parameters and conforms with raw Vertex AI JSON REST format. |
+| **AC-2** | **Dynamic Fallback** | All charts on Dashboard v2 automatically display exact token metrics if the native OTel metric exists, and fall back to request volumes if it does not. |
+| **AC-3** | **Pre-Auth Enforced** | All local tools authenticate developers using native Google Cloud IAM (e.g. ADC) before a model request is processed. |
+| **AC-4** | **Zero-Code Payload Logs** | Exact token sizes (prompt, output, cached) are logged natively on Vertex AI base models into a central BigQuery table with no intermediate server required. |
+| **AC-5** | **Cost & Security Aligned** | Complete reference documentation explaining the security benefit of native IAM and cost considerations of native request-response logging. |

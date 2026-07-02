@@ -1,12 +1,12 @@
 # ☕ Stage 4: Technical Specification
 
-This technical specification details the architectural, query, and codebase improvements to migrate Developer AI Tools: User Token Tracker Dashboard (v2) to PromQL, harden the log-based metrics, and fix Python proxy reference templates.
+This technical specification details the architectural, query, and configuration improvements to migrate Developer AI Tools: User Token Tracker Dashboard (v2) to PromQL, harden log-based metrics, and implement **Native GEAP Request-Response Logging (via `PublisherModelConfig`)**.
 
 ---
 
 ## 1. Dashboard v2 PromQL Migration Design
 
-Standard GCM filter widgets in `geap-monitoring-dashboard-v2.json` will be replaced with `prometheusQuery` elements.
+Standard GCM filter widgets in `geap-monitoring-dashboard-v2.json` are upgraded to utilize `prometheusQuery` blocks.
 
 ### 1.1 Metric Translation Maps
 In PromQL, GCP translates the custom log-based metric `logging.googleapis.com/user/user_tokens` to:
@@ -20,11 +20,11 @@ For `DISTRIBUTION` metrics (Option 2), PromQL exposes these scalar suffixes:
 *   `logging_googleapis_com:user_user_tokens_count`: Accumulates request count.
 
 ### 1.2 The Fallback Schema Pattern
-To ensure the dashboard works seamlessly under both schemas, every chart utilizes the PromQL `or` operator.
+To ensure the dashboard works seamlessly under both Audit Logs (counters) and Native Logging (distributions), every chart utilizes the PromQL `or` operator:
 ```promql
 <Option_2_Distribution_Query> or <Option_1_Scalar_Query>
 ```
-If Option 2 is deployed, the first operand returns data and is displayed. If Option 2 is not deployed, the first operand returns an empty vector, and PromQL falls back to evaluating the second operand (Option 1's request-count data).
+If Native Logging (Option 2) is active, the first operand returns data and is displayed. If Native Logging is not deployed, the first operand returns an empty vector, and PromQL falls back to evaluating the second operand (Option 1's request-count data).
 
 ---
 
@@ -39,7 +39,6 @@ If Option 2 is deployed, the first operand returns data and is displayed. If Opt
 *   **Axes & Legend**:
     *   Title: `"Token Consumption (or Requests) by User (Over Time)"`
     *   Y-Axis Label: `"Rate / Second"`
-    *   Description: Displays actual token ingestion rate per second (Option 2) or request rate per second (Option 1).
 
 ### Widget 3: Total Tokens (or Requests) Consumed per User
 *   **Widget Type**: `xyChart` (Stacked Bar)
@@ -77,77 +76,84 @@ If Option 2 is deployed, the first operand returns data and is displayed. If Opt
     ```promql
     sum(increase(logging_googleapis_com:user_user_tokens_sum[${__interval}])) by (user_id, model_id) or sum(increase(logging_googleapis_com:user_user_tokens[${__interval}])) by (user_id, model_id)
     ```
-*   **Settings**: `"outputFullDuration": true` allows aggregation over the exact selected timeframe window.
-
-### Widget 7: Total Invocations (or Tokens) by Model (All Users)
-*   **Widget Type**: `xyChart` (Stacked Bar)
-*   **PromQL Query**:
-    ```promql
-    sum(increase(logging_googleapis_com:user_user_tokens_sum[1m])) by (model_id) or sum(increase(logging_googleapis_com:user_user_tokens[1m])) by (model_id)
-    ```
-*   **Axes & Legend**:
-    *   Title: `"Total Tokens (or Requests) Consumed by Model (All Users)"`
-    *   Y-Axis Label: `"Total Count (Tokens or Requests)"`
+*   **Settings**: `"outputFullDuration": true` aggregates the cumulative sums exactly over the active selected dashboard window (e.g. Last 7 Days, Last 1 Hour).
 
 ---
 
 ## 3. Log-Based Metric Hardening Spec
 
-### 3.1 `user-tokens-proxy.yaml` (Option 2)
-Add explicit parentheses to ensure strict logical order of evaluation and prevent matching all `global` logs:
-```yaml
-filter: '(resource.type="global" OR resource.type="cloud_run_revision") AND jsonPayload.event="gemini_call"'
-```
-
-### 3.2 `user-tokens-audit-log.yaml` (Option 1)
-Replace case-insensitive approximations with exact case-sensitive gRPC methods to guarantee future-proof execution on Cloud Logging:
+### 3.1 `user-tokens-audit-log.yaml` (Option 1)
+Identifies API activities from standard Audit Logs and extracts caller and model details:
 ```yaml
 filter: 'logName:"cloudaudit.googleapis.com%2Fdata_access" AND protoPayload.serviceName="aiplatform.googleapis.com" AND (protoPayload.methodName:"GenerateContent" OR protoPayload.methodName:"Predict")'
 ```
 
+### 3.2 `user-tokens-proxy.yaml` (Option 2 - OpenTelemetry Log Extractor)
+When native request-response logging has OpenTelemetry (`enableOtelLogging`) enabled, Vertex AI writes structured OpenTelemetry logs to Cloud Logging. The metric extracts exact token counts directly from the OTel body payload:
+```yaml
+filter: 'resource.type="aiplatform.googleapis.com/PublisherModel" AND jsonPayload.body.name="gemini_call"'
+valueExtractor: 'EXTRACT(jsonPayload.body.totalTokens)'
+```
+
 ---
 
-## 4. Ingestion & Proxy Refactoring Spec
+## 4. Native GEAP Ingestion & BigQuery Spec
 
-### 4.1 Python FastAPI Logging Proxy Code Refactoring
-In `HOW_TO_COLLECT_USER_DATA.md`, modify the Python FastAPI reference implementation:
-1.  **Dynamic Client Initialization**: Move client initialization inside the route handler to dynamically parse and apply `{project}` and `{location}` from the request path.
-2.  **API Schema Compliance**: Ensure the proxy response structure perfectly maps back to standard Vertex AI JSON REST format so that local tools (`agy`, `GeminiCLI`) do not experience runtime failures.
+Instead of hosting custom proxy servers, GEAP model logging is enabled natively using the `setPublisherModelConfig` API.
 
-```python
-@app.post("/v1/projects/{project}/locations/{location}/publishers/google/models/{model_id}:generateContent")
-async def proxy_generate_content(project: str, location: str, model_id: str, request: Request):
-    # 1. Identify user
-    user_email = request.headers.get("X-Forwarded-User", "unknown@company.com")
-    
-    # 2. Instantiate Client Dynamically for the given Project and Location
-    client = genai.Client(vertexai=True, project=project, location=location)
-    
-    # 3. Read body and call Vertex AI
-    req_body = await request.json()
-    response = client.models.generate_content(
-        model=model_id,
-        contents=req_body.get("contents"),
-        config=req_body.get("config")
-    )
-    
-    # 4. Extract token sizes and cache stats
-    input_tokens = response.usage_metadata.prompt_token_count or 0
-    output_tokens = response.usage_metadata.candidates_token_count or 0
-    total_tokens = input_tokens + output_tokens
-    
-    # 5. Log metrics
-    logging.info({
-        "event": "gemini_call",
-        "userId": user_email,
-        "modelId": model_id,
-        "inputTokens": input_tokens,
-        "outputTokens": output_tokens,
-        "totalTokens": total_tokens,
-        "cachedTokens": response.usage_metadata.cached_content_token_count or 0
-    })
-    
-    # 6. Return response in standard Vertex AI REST JSON format
-    return response.model_dump(by_alias=True)
+### 4.1 Native Platform Configuration Request
+*   **Method**: `POST`
+*   **URL**: `https://{LOCATION}-aiplatform.googleapis.com/v1beta1/projects/{PROJECT_ID}/locations/{LOCATION}/publishers/google/models/{MODEL_ID}:setPublisherModelConfig`
+*   **Headers**: `Authorization: Bearer $(gcloud auth print-access-token)`
+*   **Request Payload**:
+    ```json
+    {
+      "publisherModelConfig": {
+        "loggingConfig": {
+          "enabled": true,
+          "samplingRate": 1.0,
+          "bigqueryDestination": {
+            "outputUri": "bq://{PROJECT_ID}.vertex_logs.request_response_logs"
+          },
+          "enableOtelLogging": true
+        }
+      }
+    }
+    ```
+
+### 4.2 BigQuery Cost & Security Correlation Query
+Because payload logs do not directly write the caller's email into the BigQuery dataset (to prevent data privacy leaks), administrators correlate exact token usage with validated user identities by running an inner join between the native **BigQuery Logging Table** and the native **GCP Cloud Audit Logs Table**:
+
+```sql
+SELECT 
+  audit.protopayload_auditlog.authenticationInfo.principalEmail AS user_id,
+  log.model AS model_id,
+  log.logging_time AS call_timestamp,
+  CAST(JSON_EXTRACT(log.full_response, "$.usageMetadata.promptTokenCount") AS INT64) AS input_tokens,
+  CAST(JSON_EXTRACT(log.full_response, "$.usageMetadata.candidatesTokenCount") AS INT64) AS output_tokens,
+  CAST(JSON_EXTRACT(log.full_response, "$.usageMetadata.promptTokenCount") AS INT64) + 
+    CAST(JSON_EXTRACT(log.full_response, "$.usageMetadata.candidatesTokenCount") AS INT64) AS total_tokens
+FROM 
+  `{PROJECT_ID}.vertex_logs.request_response_logs` AS log
+INNER JOIN 
+  `{PROJECT_ID}.cloudaudit_googleapis_com.data_access_*` AS audit
+ON 
+  JSON_EXTRACT_SCALAR(log.metadata, "$.request_id") = JSON_EXTRACT_SCALAR(audit.protopayload_auditlog.metadata, "$.request_id")
+WHERE 
+  _TABLE_SUFFIX BETWEEN FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)) AND FORMAT_DATE('%Y%m%d', CURRENT_DATE())
+ORDER BY 
+  call_timestamp DESC;
 ```
-Using `by_alias=True` ensures Pydantic outputs camelCase field names matching the standard Vertex AI REST API schema exactly.
+
+---
+
+## 5. Security & Cost Considerations Spec
+
+### 5.1 Native Security & IAM
+*   **Pre-Auth Enforcement**: Developers are authenticated locally via standard Google ADC. Since they connect directly to `aiplatform.googleapis.com`, standard GCP IAM handles access control. 
+*   **Preventing Bypasses**: Developers cannot bypass log collection. If they call a base model configured with `PublisherModelConfig` logging, Vertex AI's internal platform engine intercepts and logs the call asynchronously, regardless of the developer's client configurations.
+
+### 5.2 Cost Optimization Strategy
+*   **BigQuery Ingestion & Storage**: BigQuery storage is cheap ($0.02 per GiB/month). The first 10 GiB is completely free.
+*   **Custom Metrics**: Metric samples beyond GCM's free tier of 150 MiB/month are charged at $0.30 per million.
+*   **Adaptive Sampling Rate**: For large development organizations with massive request volume, administrators can adjust the `samplingRate` under `loggingConfig` (e.g. `0.1` for 10% sampling) to scale down logging storage and metric ingestion volumes, while maintaining statistically accurate dashboards!

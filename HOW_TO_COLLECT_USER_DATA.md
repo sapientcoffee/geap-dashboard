@@ -1,104 +1,112 @@
-# ☕ How to Collect Developer User Data for Antigravity & GeminiCLI
+# ☕ How to Collect Developer User Data Natively for Antigravity & GeminiCLI
 
-Because **Antigravity** (`agy`) and **GeminiCLI** are CLI tools running on developers' local machines, their default network requests flow directly to Vertex AI without writing standard application-level logs into your central **Google Cloud Logging** system. As a result, the v2 (User Tracking) dashboard starts empty by default.
+Because **Antigravity** (`agy`) and **GeminiCLI** are local CLI tools running on developer machines, their requests flow directly to Vertex AI / Agent Platform (GEAP). 
 
-To populate your dashboard with per-user data, we have created two ready-to-use custom Log-Based Metric configurations. Choose one of the two standard solutions below:
-
-> [!TIP]
-> **Dashboard v2 Dynamic Fallback**: Dashboard v2 employs standard PromQL logical fallbacks (`or`). You can deploy Option 1 first (No-Code Audit Logs) to immediately track request counts, and later deploy Option 2 (Lightweight Proxy) to track exact tokens. Dashboard v2 will automatically detect and transition to exact token graphs without any dashboard configuration changes!
+Instead of hosting and managing a custom proxy server on Cloud Run, we can use GEAP's native **Request-Response Logging (via `PublisherModelConfig`)** to automatically log exact input, output, and cached token sizes directly to a central **BigQuery table** and **OpenTelemetry (OTel)** logging stream with **zero custom proxy code!**
 
 ---
 
-## 🛠️ Solution 1: Enable Data Access Audit Logs (No Code Changes! ⚡)
+## 🔒 Security Advantage: Native GCP IAM Pre-Auth
 
-Google Cloud natively audits every API request made to Vertex AI. Since Data Access Audit Logs are **already enabled** in your project for `aiplatform.googleapis.com` (Vertex AI API), you just need to create the log-based metric to start tracking user calls immediately.
+*   **100% Pre-Auth Enforced**: Developers authenticate locally using standard Google credentials (`gcloud auth application-default login`). Direct GCP IAM permissions control whether they can call the model.
+*   **Zero-Bypass Logging**: Because logging is enabled at the platform level on the base foundation models, **every single call is audited and logged asynchronously inside Google's infrastructure**. Developers cannot bypass or turn off this tracking by changing local endpoint variables.
 
-> [!NOTE]
-> Since Audit Logs do not capture payload data for privacy reasons, this tracks **Request Volume** per user rather than exact token sizes, but it still populates your v2 dashboard beautifully with developer activity!
+---
 
-### Step 1: Create the Log-Based Metric
-Run the following `gcloud` command to create the custom metric `user_tokens` using our pre-built configuration file:
+## 🛠️ Step-by-Step Native Setup
 
-```bash
-gcloud logging metrics create user_tokens --config-from-file=user-tokens-audit-log.yaml
+### Step 1: Enable Request-Response Logging on Base Models
+
+Select one of the two standard platform configuration patterns below to enable logging on a base model (such as `gemini-2.5-flash`):
+
+#### Pattern A: Via REST API / curl (Recommended)
+Create a file named `request.json` with the following configuration (replace `{PROJECT_ID}` with your project ID):
+```json
+{
+  "publisherModelConfig": {
+    "loggingConfig": {
+      "enabled": true,
+      "samplingRate": 1.0,
+      "bigqueryDestination": {
+        "outputUri": "bq://{PROJECT_ID}.vertex_logs.request_response_logs"
+      },
+      "enableOtelLogging": true
+    }
+  }
+}
 ```
 
-This configuration automatically:
-1. Filters for Data Access audit logs from `aiplatform.googleapis.com` (Vertex AI).
-2. Extracts the caller's Google identity (`principalEmail`) and maps it to the `user_id` label.
-3. Parses the target model name from the request resource path and maps it to the `model_id` label.
+Then run the following `curl` command to register the model configuration in region `us-central1` (or your target region):
+```bash
+curl -X POST \
+  -H "Authorization: Bearer $(gcloud auth print-access-token)" \
+  -H "Content-Type: application/json; charset=utf-8" \
+  -d @request.json \
+  "https://us-central1-aiplatform.googleapis.com/v1beta1/projects/{PROJECT_ID}/locations/us-central1/publishers/google/models/gemini-2.5-flash:setPublisherModelConfig"
+```
 
-### Step 2: Test & Verify
-Run some local `agy` commands or `GeminiCLI` calls. Once the logs flow in, your Dashboard v2 will automatically start plotting requests by user!
-
----
-
-## 🏗️ Solution 2: Deploy a Lightweight Central Proxy (Tracks Exact Tokens! 💎)
-
-If you want to track **both** the developer's identity **and the exact number of tokens** (input, output, cached) they are using, you can deploy a lightweight central logging proxy in your organization.
-
-### Step 1: Deploy the Proxy on Cloud Run
-Create a small Node.js or Python API proxy on Cloud Run. The proxy intercepts the `generateContent` calls, forwards them to Vertex AI, extracts the token metadata, and writes a structured JSON log containing the total tokens:
-
+#### Pattern B: Via Python SDK (Vertex AI Preview)
+Run this Python snippet inside your environment:
 ```python
-# Copyright 2026 Google LLC
-# Licensed under the Apache License, Version 2.0
-import logging
-from fastapi import FastAPI, Request
-from google import genai
+import vertexai
+from vertexai.preview.generative_models import GenerativeModel
 
-app = FastAPI()
+PROJECT_ID = "coffee-and-codey"
+LOCATION = "us-central1"
 
-@app.post("/v1/projects/{project}/locations/{location}/publishers/google/models/{model_id}:generateContent")
-async def proxy_generate_content(project: str, location: str, model_id: str, request: Request):
-    # 1. Identify the user from their caller token or headers (e.g., identity-aware proxy)
-    user_email = request.headers.get("X-Forwarded-User", "unknown@company.com")
-    
-    # 2. Instantiate Client Dynamically for the given Project and Location
-    client = genai.Client(vertexai=True, project=project, location=location)
-    
-    # 3. Forward call to Vertex AI
-    req_body = await request.json()
-    response = client.models.generate_content(
-        model=model_id,
-        contents=req_body.get("contents"),
-        config=req_body.get("config")
-    )
-    
-    input_tokens = response.usage_metadata.prompt_token_count or 0
-    output_tokens = response.usage_metadata.candidates_token_count or 0
-    total_tokens = input_tokens + output_tokens
-    
-    # 4. Log user and exact token counts to Cloud Logging
-    logging.info({
-        "event": "gemini_call",
-        "userId": user_email,
-        "modelId": model_id,
-        "inputTokens": input_tokens,
-        "outputTokens": output_tokens,
-        "totalTokens": total_tokens,
-        "cachedTokens": response.usage_metadata.cached_content_token_count or 0
-    })
-    
-    # 5. Return response in standard Vertex AI REST JSON format
-    return response.model_dump(by_alias=True)
+# Initialize Vertex AI SDK
+vertexai.init(project=PROJECT_ID, location=LOCATION)
+
+# Initialize target base foundation model
+model = GenerativeModel("gemini-2.5-flash")
+
+# Enable native logging to BigQuery and OpenTelemetry
+model.set_request_response_logging_config(
+    enabled=True,
+    sampling_rate=1.0,
+    bigquery_destination=f"bq://{PROJECT_ID}.vertex_logs.request_response_logs",
+    enable_otel_logging=True
+)
+print("Native request-response logging successfully configured!")
 ```
 
-### Step 2: Create the Log-Based Metric
-Run the following `gcloud` command to create the distribution metric `user_tokens` using our pre-built configuration file:
+---
+
+### Step 2: Transition the `user_tokens` Log-Based Metric
+
+Once `enableOtelLogging` is active, Vertex AI writes structured OpenTelemetry logs to Cloud Logging on every model call. 
+
+Update your custom GCM log-based metric `user_tokens` to extract exact token sizes from these native OpenTelemetry logs by running:
 
 ```bash
-gcloud logging metrics create user_tokens --config-from-file=user-tokens-proxy.yaml
+gcloud logging metrics update user_tokens --config-from-file=user-tokens-proxy.yaml
 ```
 
-This configuration automatically:
-1. Extracts the numerical `totalTokens` field from your structured logs.
-2. Tracks the custom `user_id` and `model_id` labels from the JSON payload.
-3. Computes exact token sums and aggregates them on your Dashboard v2!
+*   **How it works**: This instructs GCM to look for OpenTelemetry logs on the `PublisherModel` resource, extract the `totalTokens` payload value, and store them as a GCM `DISTRIBUTION` histogram.
+*   **Result**: Dashboard v2's PromQL fallback queries automatically detect these distribution metrics, switching your charts from plotting simple request counts to plotting **exact, high-fidelity token volumes!**
 
-### Step 3: Redirect Local Tools to the Proxy
-Developers configure their local shell environment to redirect traffic to your Cloud Run proxy:
+---
+
+### Step 3: Zero-Config Client Setup for Developers
+
+Because logging is serverless and enforced on the platform itself, developers do **not** need to route traffic through any custom proxies or override endpoints:
 
 ```bash
-export VERTEX_API_ENDPOINT="https://gemini-proxy-xxxxxx.a.run.app"
+# REJECT / REMOVE any custom proxy endpoint settings!
+unset VERTEX_API_ENDPOINT
+
+# Developers simply authenticate normally
+gcloud auth application-default login
 ```
+
+Every `agy` or `GeminiCLI` request they make will automatically flow safely to Vertex AI, be authenticated natively via GCP IAM, and be recorded inside your audit and token tables!
+
+---
+
+## 💰 Cost Considerations
+
+To prevent billing surprises, administrators should consider the following cost structures:
+
+1.  **BigQuery Storage & Ingestion**: BigQuery charges a tiny fee for data storage ($0.02/GiB/month) and ingestion. Since the first **10 GiB/month** is completely free under BigQuery's free tier, tracking logs for teams of up to several hundred developers will cost **$0.00**.
+2.  **Cloud Logging (OTel Streams)**: Standard log ingestion in GCP is free for the first **50 GiB/month** per project. Beyond that, it is $0.50 per GiB.
+3.  **Adaptive Sampling Rate**: For large engineering groups with high volumes, you can set `samplingRate` to a fraction (e.g. `0.1` for 10% sampling) under `loggingConfig`. This reduces data ingestion and storage volumes by 90% while still providing statistically precise usage distributions on your dashboard!

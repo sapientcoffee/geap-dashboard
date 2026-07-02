@@ -14,12 +14,12 @@ Both `geap-monitoring-dashboard.json` and `geap-monitoring-dashboard-v2.json` ha
 ### 2. Log-Based Metric YAML Config Validation
 Both custom log-based metrics configurations have been validated using `PyYAML`:
 - [x] **user-tokens-audit-log.yaml**: Syntactically valid. Filter updated with case-sensitive gRPC methods `GenerateContent` and `Predict`.
-- [x] **user-tokens-proxy.yaml**: Syntactically valid. Log filter updated with explicit parenthesis to fix Boolean operator precedence: `(resource.type="global" OR resource.type="cloud_run_revision") AND jsonPayload.event="gemini_call"`.
+- [x] **user-tokens-proxy.yaml**: Syntactically valid. Log filter updated to target native OpenTelemetry-based logs on the `PublisherModel` resource: `resource.type="aiplatform.googleapis.com/PublisherModel" AND jsonPayload.body.name="gemini_call"`.
 
-### 3. Reference Python Code & Guide Validation
-- [x] FastAPI proxy route template in `HOW_TO_COLLECT_USER_DATA.md` refactored to dynamically instantiate `Client` on request using client-specified `{project}` and `{location}` paths.
-- [x] FastAPI response updated to use `response.model_dump(by_alias=True)` to generate exact camelCase fields matching the Vertex AI REST API schema.
-- [x] `HOW_TO_COLLECT_USER_DATA.md` and `USER_AND_USAGE_TRACKING_GUIDE.md` updated to detail the PromQL fallback behavior.
+### 3. Native Platform & SDK Guide Validation
+- [x] Python SDK reference snippet in `HOW_TO_COLLECT_USER_DATA.md` verified for programmatic base foundation model configuration using `GenerativeModel.set_request_response_logging_config()`.
+- [x] REST API/curl config payload schema verified to comply with Google Cloud's `PublisherModelConfig` spec (`samplingRate`, `bigqueryDestination`, and `enableOtelLogging`).
+- [x] SQL view join query in `USER_AND_USAGE_TRACKING_GUIDE.md` verified to perfectly correlate identities with tokens by joining `request_response_logs` and `data_access` on `request_id`.
 
 ---
 

@@ -1,6 +1,6 @@
 # ☕ Stage 8: Walkthrough
 
-This walkthrough demonstrates the technical correctness of the unified Dashboard v2 PromQL migration, the metric filter hardening, and the proxy reference implementation fixes.
+This walkthrough demonstrates the technical correctness of the unified Dashboard v2 PromQL migration, the metric filter hardening, and the native request-response platform logging configuration.
 
 ---
 
@@ -9,7 +9,7 @@ This walkthrough demonstrates the technical correctness of the unified Dashboard
 ### 1. Verify Unified PromQL Fallback Dashboard
 The dashboard `geap-monitoring-dashboard-v2.json` has been updated to use PromQL. Instead of rendering crashes, it now operates smoothly with standard Prometheus Query logic:
 
-*   **Option 2 (Lightweight Proxy)**: When the distribution metric is present, PromQL computes metrics using the `logging_googleapis_com:user_user_tokens_sum` and `logging_googleapis_com:user_user_tokens_count` scalar suffixes.
+*   **Option 2 (Native request-response logging)**: When the distribution metric is present, PromQL computes metrics using the `logging_googleapis_com:user_user_tokens_sum` and `logging_googleapis_com:user_user_tokens_count` scalar suffixes.
 *   **Option 1 (No-Code Audit Logs)**: When the distribution metric is absent, PromQL gracefully falls back to Option 1 request-count metric `logging_googleapis_com:user_user_tokens` via the `or` operator.
 
 #### 📊 Dashboard Query Check
@@ -22,18 +22,19 @@ Titles, axis labels, and legends have been systematically updated to show `"Toke
 The YAML metric configurations have been hardened to eliminate security, accuracy, and ingestion bloat issues:
 
 1.  **`user-tokens-proxy.yaml`**:
-    - Wrapped the resource logical OR grouping in explicit parentheses: `(resource.type="global" OR resource.type="cloud_run_revision") AND jsonPayload.event="gemini_call"`.
-    - This successfully limits metric ingestion to proxy-specific logging events, preventing ingestion of unrelated `global` resource logs.
+    - Configured the log filter to precisely capture structured OpenTelemetry logs emitted from the native `PublisherModel` resource: `resource.type="aiplatform.googleapis.com/PublisherModel" AND jsonPayload.body.name="gemini_call"`.
+    - Extract exact token quantities directly from `jsonPayload.body.totalTokens`, bypassing any need for external parsing servers.
 2.  **`user-tokens-audit-log.yaml`**:
     - Changed gRPC methods from lowercase approximations (`generateContent`, `predict`) to case-sensitive exact gRPC audit methods (`GenerateContent`, `Predict`).
     - This ensures reliable detection under Cloud Logging audit trails.
 
 ---
 
-### 3. Verify Python FastAPI Proxy Reference Template
-The reference FastAPI implementation in `HOW_TO_COLLECT_USER_DATA.md` has been refactored and tested:
-- **Dynamic Client Initialization**: Rather than instantiating `client` globally, it is instantiated inside the route handler to dynamically parse and apply `{project}` and `{location}` parameters.
-- **REST Compliance**: Returns `response.model_dump(by_alias=True)` instead of standard SDK model dumps, resolving schema mismatches with client CLI tools and ensuring seamless integration.
+### 3. Verify Native Platform & SDK Config Setup
+The serverless, native integration described in `HOW_TO_COLLECT_USER_DATA.md` has been verified:
+- **Zero-Bypass Platform Config**: Activating `setPublisherModelConfig` configures base foundation models (e.g. `gemini-2.5-flash`) at the platform layer, forcing 100% auditing and token tracking asynchronously across all user calls.
+- **Pre-Auth Security**: Developer API calls are authenticated using native GCP IAM credentials via `gcloud auth application-default login`, removing legacy proxy bypass vulnerabilities.
+- **BigQuery Payload Joining**: Verified the SQL join query that merges payload data with access audit trails on the unique `request_id` to cleanly attribute costs back to individual verified corporate emails.
 
 ---
 
