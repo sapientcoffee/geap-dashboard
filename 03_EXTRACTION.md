@@ -85,3 +85,10 @@ Since the `model_id` labels are distinct, the `or` union retains all present ser
 To render tables responsive to time ranges selected in GCM dashboards, we must use:
 - `"outputFullDuration": true`: Instructs GCM to output a single scalar value summed over the chosen time range.
 - `[${__interval}]` range vector: Directs GCM to aggregate values over the dashboard's active duration window.
+
+---
+
+## 5. Location Auditing & GCM Metrics Extraction Fact
+*   **The Global Location Auditing Gap**: Calls made to the logical `locations/global` endpoint do not publish Data Access `DATA_READ` audit logs to Cloud Logging.
+*   **Regional Endpoint Auditing**: Regional endpoints (such as `locations/us-central1`) write complete Data Access audit logs containing caller identities (`principalEmail`).
+*   **Metric Mapping**: The custom log-based metric `user_tokens` under Option 1 (No-Code Audit Logs) filters by `protoPayload.serviceName="aiplatform.googleapis.com"`. Since global calls do not write audit logs, they are invisible to the metric filter and do not appear in GCM timeseries, resulting in blank lines on GCM Dashboard v2. Shifting calls to regional locations (like `us-central1`) ensures 100% of invocations are tracked.

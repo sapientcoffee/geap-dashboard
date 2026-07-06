@@ -83,3 +83,17 @@ The GCM grid is structured using `"columns": "2"`.
 *   **Row 3**: API Requests Rate & Model Types Utilized per User
 *   **Row 4**: Per-User Token Consumption by Model (Table) & Total Model Invocations (All Users)
 *   **Row 5**: Real-Time User Cost over Time & User Cost Summary Table (New Rows)
+
+---
+
+## 5. Client-Side Location Specification (Antigravity CLI)
+To ensure developer calls are fully captured by regional GCM metric ingestion schemas and generate required audit logs, clients must target a regional endpoint rather than logical global multi-regions:
+*   **Target File**: `~/.gemini/antigravity-cli/settings.json`
+*   **JSON Path**: `$.gcp.location`
+*   **Value Requirement**: Must be updated from `"global"` to a regional endpoint (e.g. `"us-central1"`).
+   ```json
+   "gcp": {
+     "project": "coffee-and-codey",
+     "location": "us-central1"
+   }
+   ```

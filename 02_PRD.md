@@ -13,6 +13,7 @@ This enhancement extends **Dashboard v2 (User Token Tracker)** to support fine-g
 1.  **Dashboard Empty/Missing Data**: Standard local developer SDK or CLI (`agy`, `GeminiCLI`) calls directly query Vertex AI. Because Google Cloud does not natively write prompt payloads or token count metadata to standard Cloud Logging for privacy/security reasons, standard time-series dashboards are empty by default.
 2.  **Lack of Developer Cost Attribution**: While administrators can track aggregate cost trends in Dashboard v1, they cannot see real-time estimated costs mapped directly to individual developers in Dashboard v2. This makes it impossible to quickly identify which specific user is driving high spend or to perform real-time internal billing allocations.
 3.  **Ambiguity in Per-User Model Token Utilization**: While request rates are visible, a dedicated, high-fidelity view of exact token consumption per user, clearly broken down by model type, is missing. This is critical for assessing model selection efficiency across different engineering teams.
+4.  **Global Endpoint Audit Limitations**: In addition to standard payload omissions, calls targeting the logical `locations/global` multi-region endpoint do not write standard `DATA_READ` audit logs to Cloud Logging. This means GCM custom log-based metrics cannot extract user emails, causing user tracker dashboards to remain completely blank.
 
 ---
 
@@ -23,6 +24,7 @@ This enhancement extends **Dashboard v2 (User Token Tracker)** to support fine-g
 *   **Per-User Token Breakdown by Model**: Provide explicit, dedicated visualizations demonstrating exactly how many tokens (or fallback request volumes) each developer consumed on each specific model.
 *   **Zero-Crash PromQL Fallbacks**: Retain and expand the unified PromQL fallback scheme (`or` operator) to support both Audit Log counters (Option 1) and exact distribution metrics (Option 2) seamlessly across all new widgets.
 *   **Standardized Blended Pricing**: Implement correct standard price multipliers for developer models (Gemini 3.5 Flash, 3.1 Pro, etc.) scaled by typical workload splits for unified `totalTokens` tracking.
+*   **Regional Endpoint Configuration Guidance**: Document the mandatory client-side regional configuration for tools like the Antigravity CLI (`agy`) to ensure consistent data access audit logs are written for GCM and BigQuery user tracking.
 
 ### Non-Goals
 *   Querying official Google Cloud billing invoices directly (we track estimated costs based on ingestion metrics).

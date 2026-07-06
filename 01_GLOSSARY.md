@@ -25,3 +25,6 @@ This glossary defines the ubiquitous language for the Developer AI Tools Monitor
 | **Total Per-User Cost** | The sum of real-time estimated costs (in USD) incurred by an individual user, computed by multiplying model types and token consumption rates (or request counts) against standard list prices. | Financial |
 | **Blended Pricing Rate** | An estimated rate applied to a unified `totalTokens` count (which sums input and output tokens) based on an assumed typical developer workload proportion (e.g., 80% input tokens, 20% output tokens). | Financial |
 | **Per-User Token Consumption by Model** | Fine-grained developer-level tracking of exact token counts (or request counts if under fallback) grouped both by user identity and model ID over time. | Ingestion |
+| **Regional Endpoint Routing** | Directing model API calls through regional locations (e.g. `us-central1`) to ensure standard Cloud Logging audit trails are generated. | Ingestion |
+| **locations/global Auditing Limitation** | The logical multi-region endpoint `global` does not write standard `DATA_READ` audit logs to Cloud Logging, preventing user mapping on GCM. | Ingestion |
+| **settings.json Configuration** | Local file at `~/.gemini/antigravity-cli/settings.json` where developers specify target GCP project and regional locations (e.g. `us-central1`). | Configuration |

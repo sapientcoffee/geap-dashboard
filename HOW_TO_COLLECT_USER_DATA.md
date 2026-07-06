@@ -118,6 +118,18 @@ unset VERTEX_API_ENDPOINT
 gcloud auth application-default login
 ```
 
+#### 💻 Antigravity CLI (`agy`) Regional Configuration
+To ensure developer calls are fully captured by Cloud Audit Logs and successfully reported on GCM dashboards, configure `agy` to target a regional endpoint:
+1. Open the global settings file: `~/.gemini/antigravity-cli/settings.json`
+2. Update the `"location"` from `"global"` to `"us-central1"` inside the `"gcp"` section:
+   ```json
+   "gcp": {
+     "project": "coffee-and-codey",
+     "location": "us-central1"
+   }
+   ```
+3. Save the file and restart any active `agy` sessions.
+
 Every `agy` or `GeminiCLI` request they make will automatically flow safely to Vertex AI, be authenticated natively via GCP IAM, and be recorded inside your audit and token tables!
 
 ---

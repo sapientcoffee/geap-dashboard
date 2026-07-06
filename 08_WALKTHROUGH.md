@@ -78,6 +78,16 @@ We successfully verified that the client harness calling `gemini-3.5-flash` uses
 
 ---
 
+### 5. GCM Regional Endpoint Troubleshooting & Resolution
+During implementation and dashboard loading, we diagnosed why some developer metrics were showing up as blank lines on GCM Dashboard v2:
+* **The Diagnostic**: We discovered that the logical `global` location endpoint (`aiplatform.googleapis.com` in `locations/global`) does not publish standard `DATA_READ` audit logs to Cloud Logging. Because GCM log-based metrics rely on these logs to extract the authenticated `user_id` / email, calling the global endpoint will yield no timeseries points, leaving the dashboard blank.
+* **The Resolution**: By transitioning developer clients to regional endpoints (e.g. `us-central1`), Vertex AI emits standard data access audit logs, instantly populating the `user_tokens` log-based metric and GCM Dashboard v2 with 100% of calls and costs!
+* **The Antigravity CLI Hook**: We successfully mapped and documented how developers target these regional endpoints inside their global client configuration:
+  * File: `~/.gemini/antigravity-cli/settings.json`
+  * Action: Change `"location"` to `"us-central1"` under the `"gcp"` section.
+
+---
+
 ## 🏁 Verification Script Execution Proof
 
 ```bash

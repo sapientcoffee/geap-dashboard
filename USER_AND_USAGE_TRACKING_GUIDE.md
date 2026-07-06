@@ -8,28 +8,46 @@ We have deployed an advanced, unified dashboard to your Google Cloud project:
 > [!NOTE]
 > **Unified PromQL Architecture**: Dashboard v2 has been migrated to PromQL with logical fallbacks (`or`). This means a single dashboard definition natively and dynamically supports **both** Solution A1 and Solution A2. If you start with Solution A1, the charts display request counts; once you enable Solution A2, the dashboard automatically transitions to plotting exact token count metrics!
 
-Here are the two standard patterns to implement per-user and per-team tracking:
+---
+
+## 🛑 The Regional Endpoint Mandate (Critical Requirement)
+
+To track user-level metrics in **either** Google Cloud Monitoring (GCM) or BigQuery, your developer clients (including **Antigravity CLI** and custom SDK scripts) **MUST** route their Vertex AI requests through a **regional endpoint** (such as `us-central1` or `europe-west1`) instead of the logical `global` endpoint.
+
+### Why is this required?
+* **No Global Audit Logs**: The Vertex AI global multi-region routing endpoint (`location="global"`) does **not** write standard `DATA_READ` audit logs to Cloud Logging.
+* **No GCM Email Mapping**: Without audit logs, GCM has no log-line source containing the caller's email (`principalEmail`), leaving GCM user widgets completely blank.
+* **No BigQuery Email Mapping**: In BigQuery, payload logs do not contain user emails directly for privacy and compliance reasons. Cost attribution is performed by running an `INNER JOIN` with data access audit logs on the `request_id`. If you call the global endpoint, no audit log is written, meaning the join finds no matching records and the user's calls will not appear in the cost report.
+
+### Regional vs. Global Endpoint Feature Matrix
+| Feature | Regional Endpoints (e.g. `us-central1`) | Global Endpoint (`location="global"`) |
+| :--- | :--- | :--- |
+| **GCP Data Access Audit Logs** | **Yes** (Generates `DATA_READ` logs) | **No** (Zero audit logging) |
+| **User Email Tracking (GCM)** | **Yes** (Via Audit-Log custom metric) | **No** (GCM widgets remain blank) |
+| **Exact Token Payload Logs (BQ)** | **Yes** (Via BigQuery Destination) | **Yes** (Via BigQuery Destination) |
+| **Cost Attribution Join (BQ)** | **Yes** (Full corporate email mapping) | **No** (Omits global calls due to missing audit records) |
 
 ---
 
-## 🏗️ Pattern A: Real-Time Dashboards (Custom Log-Based Metrics)
+## 🏗️ Pattern A: Real-Time Dashboards (Custom Log-Based Metrics in GCM)
 
-To populate your dashboard with per-user data, we have configured and created the log-based metric **`user_tokens`** directly in your project. It queries your Cloud Logging entries and extracts custom fields and labels.
+To populate your live Cloud Monitoring dashboard with per-user data, we use the log-based metric **`user_tokens`** created directly in your project. It queries your Cloud Logging entries and extracts custom fields and labels.
 
-### 🛠️ Solution A1: No-Code Audit Logs (Request Counts) - *DEPLOYED!* ⚡
-If you want to track developer request counts without changing any configurations or client code:
-1. We verified that **Vertex AI Data Access Audit Logs are already enabled** in your project `coffee-and-codey` for `aiplatform.googleapis.com`.
-2. We deployed the log-based metric `user_tokens` using our pre-built, hardened configuration:
-   👉 **[user-tokens-audit-log.yaml](user-tokens-audit-log.yaml)**
-3. When any developer runs local `agy` or `GeminiCLI` commands, the audit logs will automatically capture their email (`user_id`) and the model called (`model_id`), feeding them into Dashboard v2!
+### 🛠️ Solution A1: No-Code Audit Logs (Request Counts & Costs) - *ACTIVE!* ⚡
+If you want to track developer request counts and estimated costs natively in GCM without modifying any developer setups or deploying custom proxy servers:
+1. Ensure **Vertex AI Data Access Audit Logs are enabled** in your project `coffee-and-codey` for `aiplatform.googleapis.com` (already active!).
+2. Ensure the log-based metric `user_tokens` is configured to read from regional audit logs by running:
+   ```bash
+   gcloud logging metrics update user_tokens --config-from-file=user-tokens-audit-log.yaml --project=coffee-and-codey
+   ```
+3. When any developer runs local `agy` or `GeminiCLI` commands routed through `us-central1`, the audit logs will automatically capture their email (`user_id`) and the model called (`model_id`), instantly feeding them into Dashboard v2!
 
 ### 🏗️ Solution A2: Native Request-Response Logging (Exact Token Counts) 💎
-If you want to track exact input, output, and cached token totals with zero intermediate servers:
+If you want to track exact input, output, and cached token totals in GCM with zero intermediate servers:
 1. Enable native request-response logging on your base models (detailed in [HOW_TO_COLLECT_USER_DATA.md](HOW_TO_COLLECT_USER_DATA.md)).
-2. Update your `user_tokens` metric to extract exact token distributions from native OpenTelemetry logs using our configuration:
-   👉 **[user-tokens-proxy.yaml](user-tokens-proxy.yaml)**
+2. Update your `user_tokens` metric to extract exact token distributions from native OpenTelemetry logs:
    ```bash
-   gcloud logging metrics update user_tokens --config-from-file=user-tokens-proxy.yaml
+   gcloud logging metrics update user_tokens --config-from-file=user-tokens-proxy.yaml --project=coffee-and-codey
    ```
 3. Dashboard v2 will automatically detect and transition to exact token tracking graphs!
 
@@ -37,7 +55,7 @@ If you want to track exact input, output, and cached token totals with zero inte
 
 ## 📊 Pattern B: Cost & Billing Allocation (BigQuery & Looker Studio)
 
-If your goal is high-fidelity financial auditing, chargebacks, or cost attribution, you can use GEAP's native **BigQuery Request-Response Destination**. 
+If your goal is high-fidelity financial auditing, chargebacks, or department cost attribution, you should use GEAP's native **BigQuery Request-Response Destination**. 
 
 Because payload logs do not directly write user emails to BigQuery to protect data privacy, you run an inner join between your **Native Payload Logs** and **GCP Data Access Audit Logs** in BigQuery on the `request_id` field.
 
@@ -78,45 +96,33 @@ SELECT
 FROM 
   `coffee-and-codey.vertex_logs.request_response_logs` AS log
 INNER JOIN 
-  `coffee-and-codey.cloudaudit_googleapis_com.data_access_*` AS audit
+  `coffee-and-codey.cloudaudit_googleapis_com.data_access_2026` AS audit
 ON 
-  JSON_EXTRACT_SCALAR(log.metadata, "$.request_id") = JSON_EXTRACT_SCALAR(audit.protopayload_auditlog.metadata, "$.request_id")
-WHERE 
-  _TABLE_SUFFIX = FORMAT_DATE('%Y%m%d', CURRENT_DATE());
+  JSON_EXTRACT_SCALAR(log.metadata, "$.request_id") = JSON_EXTRACT_SCALAR(audit.protopayload_auditlog.metadata, "$.request_id");
 ```
 
 ### Step 2: Build a Looker Studio Report
-1. Open **Looker Studio** (formerly Data Studio).
-### Step 2: Build a Looker Studio Report
-1. Open **Looker Studio** (formerly Data Studio).
+1. Open **Looker Studio**.
 2. Click **Create > Data Source** and select **BigQuery**.
 3. Choose your project, dataset `vertex_logs`, and connect directly to the view `user_cost_attribution_report`.
 4. Create charts (e.g. Pie Charts, Bar Charts, Tables) plotting `estimated_cost_usd` grouped by `user_id`.
-5. Schedule monthly automated emails to send these reports directly to budget and department owners!
 
 ---
 
-## 📈 Real-Time User Cost Estimation (PromQL v2)
+## 💻 Client-Side Configuration (Antigravity CLI)
 
-Dashboard v2 includes dedicated user-level cost widgets:
-1. **Developer Cost over Time** (XYChart Line): Tracks per-minute estimated spend trend by user.
-2. **Developer Total Cost Summary Table** (TimeSeriesTable): Lists cumulative timeframe-responsive USD cost totals per developer with an explicit `currency` column showing `"USD"`.
+To force the Antigravity CLI (`agy`) on developer workstations to target a regional endpoint (enabling full user auditing and GCM metric reporting):
 
-### Blended Multipliers Used:
-Since `user_user_tokens_sum` accumulates total tokens (`totalTokens`), we apply blended pricing multipliers assuming a typical developer workload proportion (80% input tokens, 20% output tokens):
-
-*   **Solution A2 (Exact Tokens) Blended Multipliers**:
-    *   **Gemini 3.5 Flash**: `$3.00 / 1M` tokens (multiplier `0.00000300`)
-    *   **Gemini 3.1 Pro**: `$4.00 / 1M` tokens (multiplier `0.00000400`)
-    *   **Gemini 1.5 & 2.5 Flash**: `$0.12 / 1M` tokens (multiplier `0.00000012`)
-    *   **Gemini 1.5 Pro**: `$2.00 / 1M` tokens (multiplier `0.00000200`)
-
-*   **Solution A1 (No-Code Fallback) Request Multipliers**:
-    If exact tokens are not available, the PromQL query automatically falls back to request counts, assuming an average developer invocation size of **5,000 tokens**:
-    *   **Gemini 3.5 Flash**: `$0.0150` per request (multiplier `0.015`)
-    *   **Gemini 3.1 Pro**: `$0.0200` per request (multiplier `0.020`)
-    *   **Gemini 1.5 & 2.5 Flash**: `$0.0006` per request (multiplier `0.0006`)
-    *   **Gemini 1.5 Pro**: `$0.0100` per request (multiplier `0.010`)
+1. **Locate settings file**: Open the global settings file at:
+   `~/.gemini/antigravity-cli/settings.json`
+2. **Modify GCP Block**: Update the `"location"` from `"global"` to `"us-central1"` (or your preferred GCP region where Gemini models are available):
+   ```json
+   "gcp": {
+     "project": "coffee-and-codey",
+     "location": "us-central1"
+   }
+   ```
+3. Save the file and restart any active CLI sessions.
 
 ---
 
@@ -128,4 +134,3 @@ Since `user_user_tokens_sum` accumulates total tokens (`totalTokens`), we apply 
 | **Cloud Logging** | **$0.00** | First **50 GiB/month** per project is completely free. Overages are billed at $0.50/GiB. |
 | **BigQuery Ingest & Store** | **$0.00** | BigQuery provides **10 GiB** of free storage and **1 TiB** of free query processing per month. |
 | **Custom Log-Based Metrics** | **$0.00** | GCM custom metrics are free up to **150 MiB/month** per project. Overages are $0.30 per million samples. |
-

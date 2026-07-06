@@ -103,6 +103,29 @@ gcloud monitoring dashboards create \
 
 ---
 
+## 🛑 The Regional Endpoint Mandate (Critical Requirement)
+
+To track user-level metrics in **either** Google Cloud Monitoring (GCM) or BigQuery, developer clients (including **Antigravity CLI** and custom SDK scripts) **MUST** route their requests through a **regional endpoint** (such as `us-central1`) instead of the logical `global` endpoint.
+
+### Why is this required?
+* **No Global Audit Logs**: The Vertex AI global multi-region routing endpoint (`location="global"`) does **not** write standard `DATA_READ` audit logs to Cloud Logging.
+* **Blank GCM Dashboards**: Without audit logs, GCM cannot extract the caller's email (`principalEmail`), leaving GCM user widgets completely blank.
+* **No BigQuery Email Mapping**: BigQuery cost attribution is performed by running an `INNER JOIN` between payload logs and data access audit logs on the `request_id`. If you call the global endpoint, no audit log is written, so the user's calls will not appear in the cost report.
+
+### 💻 Local Antigravity CLI Configuration
+To force the Antigravity CLI (`agy`) on developer workstations to target a regional endpoint (enabling full user auditing and GCM metric reporting):
+1. Open the global settings file at: `~/.gemini/antigravity-cli/settings.json`
+2. Update `"location"` from `"global"` to `"us-central1"` (or your preferred GCP region) under the `"gcp"` section:
+   ```json
+   "gcp": {
+     "project": "coffee-and-codey",
+     "location": "us-central1"
+   }
+   ```
+3. Save the file and restart any active CLI sessions.
+
+---
+
 ## 🛠️ User Tracking Setup (User Token Tracker Ingestion)
 
 To feed user-level metrics into the **Developer AI Tools: User Token Tracker** dashboard, the system queries a custom logs-based metric named **`user_tokens`**.
