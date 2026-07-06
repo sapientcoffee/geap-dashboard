@@ -16,6 +16,17 @@ The dashboard `geap-monitoring-dashboard-v2.json` has been updated to use PromQL
 We verified that the PromQL queries map correctly to the custom log-based metric `user_tokens`.
 Titles, axis labels, and legends have been systematically updated to show `"Tokens (or Requests)"` to remain transparent and intuitive for developers regardless of the chosen log ingestion method.
 
+#### 💵 User Cost Estimation & Fallback Verification
+We successfully verified the two new developer-level cost estimation widgets:
+1.  **Widget 8: Real-Time Estimated Cost (USD) per User (Over Time)**:
+    *   Tracks estimated per-minute USD cost per developer using a line chart.
+    *   Aggregates costs strictly `by (user_id)` to satisfy user-level tracking requirements.
+    *   Utilizes our **Union & Outermost-Sum** query pattern (`sum( (A) or (B) or ... ) by (user_id)`) to prevent PromQL from discarding users who have only called a subset of models.
+2.  **Widget 9: Total Estimated Cost (USD) per User (Selected Timeframe)**:
+    *   Displays a tabular summary of total cost per user over the active dashboard timeframe.
+    *   Uses `${__interval}` in range vectors and `"outputFullDuration": true` inside the `timeSeriesTable` configuration to dynamically sum token counts and requests over the full selected range (e.g. Last 1 Hour, Last 14 Days) instead of drawing a line chart.
+    *   Employs `label_replace` to dynamically inject an explicit `"currency"` column containing `"USD"`, giving the table a premium, structured appearance.
+
 ---
 
 ### 2. Verify Log-Based Metric Configurations

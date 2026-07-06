@@ -87,10 +87,36 @@ WHERE
 
 ### Step 2: Build a Looker Studio Report
 1. Open **Looker Studio** (formerly Data Studio).
+### Step 2: Build a Looker Studio Report
+1. Open **Looker Studio** (formerly Data Studio).
 2. Click **Create > Data Source** and select **BigQuery**.
 3. Choose your project, dataset `vertex_logs`, and connect directly to the view `user_cost_attribution_report`.
 4. Create charts (e.g. Pie Charts, Bar Charts, Tables) plotting `estimated_cost_usd` grouped by `user_id`.
 5. Schedule monthly automated emails to send these reports directly to budget and department owners!
+
+---
+
+## 📈 Real-Time User Cost Estimation (PromQL v2)
+
+Dashboard v2 includes dedicated user-level cost widgets:
+1. **Developer Cost over Time** (XYChart Line): Tracks per-minute estimated spend trend by user.
+2. **Developer Total Cost Summary Table** (TimeSeriesTable): Lists cumulative timeframe-responsive USD cost totals per developer with an explicit `currency` column showing `"USD"`.
+
+### Blended Multipliers Used:
+Since `user_user_tokens_sum` accumulates total tokens (`totalTokens`), we apply blended pricing multipliers assuming a typical developer workload proportion (80% input tokens, 20% output tokens):
+
+*   **Solution A2 (Exact Tokens) Blended Multipliers**:
+    *   **Gemini 3.5 Flash**: `$3.00 / 1M` tokens (multiplier `0.00000300`)
+    *   **Gemini 3.1 Pro**: `$4.00 / 1M` tokens (multiplier `0.00000400`)
+    *   **Gemini 1.5 & 2.5 Flash**: `$0.12 / 1M` tokens (multiplier `0.00000012`)
+    *   **Gemini 1.5 Pro**: `$2.00 / 1M` tokens (multiplier `0.00000200`)
+
+*   **Solution A1 (No-Code Fallback) Request Multipliers**:
+    If exact tokens are not available, the PromQL query automatically falls back to request counts, assuming an average developer invocation size of **5,000 tokens**:
+    *   **Gemini 3.5 Flash**: `$0.0150` per request (multiplier `0.015`)
+    *   **Gemini 3.1 Pro**: `$0.0200` per request (multiplier `0.020`)
+    *   **Gemini 1.5 & 2.5 Flash**: `$0.0006` per request (multiplier `0.0006`)
+    *   **Gemini 1.5 Pro**: `$0.0100` per request (multiplier `0.010`)
 
 ---
 
@@ -102,3 +128,4 @@ WHERE
 | **Cloud Logging** | **$0.00** | First **50 GiB/month** per project is completely free. Overages are billed at $0.50/GiB. |
 | **BigQuery Ingest & Store** | **$0.00** | BigQuery provides **10 GiB** of free storage and **1 TiB** of free query processing per month. |
 | **Custom Log-Based Metrics** | **$0.00** | GCM custom metrics are free up to **150 MiB/month** per project. Overages are $0.30 per million samples. |
+

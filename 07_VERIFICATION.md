@@ -9,7 +9,7 @@ This document contains technical validation, syntax verification, and contract c
 ### 1. JSON Dashboard Syntax Validation
 Both `geap-monitoring-dashboard.json` and `geap-monitoring-dashboard-v2.json` have been verified using a python3 JSON compiler:
 - [x] **geap-monitoring-dashboard.json**: Syntactically valid.
-- [x] **geap-monitoring-dashboard-v2.json**: Syntactically valid. Migrated 6 widgets to PromQL fallback queries with proper syntax.
+- [x] **geap-monitoring-dashboard-v2.json**: Syntactically valid. Migrated 6 existing widgets to PromQL fallback queries, and added 2 brand-new user-level cost tracking widgets with robust PromQL vector addition safety patterns.
 
 ### 2. Log-Based Metric YAML Config Validation
 Both custom log-based metrics configurations have been validated using `PyYAML`:
@@ -40,13 +40,15 @@ python3 -c "import yaml; [yaml.safe_load(open(f)) for f in ['user-tokens-audit-l
 
 ## 🛠️ Unified PromQL Query Map Reference
 
-Below is a reference of the PromQL query patterns deployed inside `geap-monitoring-dashboard-v2.json` to handle Option 2 exact token and request tracking natively:
+Below is a reference of the PromQL query patterns deployed inside `geap-monitoring-dashboard-v2.json` to handle fallback user tracking natively (Option 2 exact token metrics OR Option 1 request-count audit logs):
 
-| Widget Name | Deployed PromQL Query |
+| Widget Name | Deployed Unified PromQL Query (Option 2 OR Option 1 Fallback) |
 | :--- | :--- |
-| **Widget 2: Token Consumption by User (Over Time)** | `sum(rate(logging_googleapis_com:user_user_tokens_sum{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[1m])) by (user_id)` |
-| **Widget 3: Total Tokens Consumed per User** | `sum(increase(logging_googleapis_com:user_user_tokens_sum{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[1m])) by (user_id)` |
-| **Widget 4: API Request Count by User (Rate)** | `sum(rate(logging_googleapis_com:user_user_tokens_count{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[1m])) by (user_id)` |
-| **Widget 5: Model Types Utilized by User** | `sum(increase(logging_googleapis_com:user_user_tokens_sum{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[1m])) by (user_id, model_id)` |
-| **Widget 6: Total Tokens Consumed per User per Model (Table Summary)** | `sum(increase(logging_googleapis_com:user_user_tokens_sum{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[${__interval}])) by (user_id, model_id)` (with `"outputFullDuration": true`) |
-| **Widget 7: Total Tokens Consumed by Model (All Users)** | `sum(increase(logging_googleapis_com:user_user_tokens_sum{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[1m])) by (model_id)` |
+| **Widget 2: Token Consumption by User (Over Time)** | `sum(rate(logging_googleapis_com:user_user_tokens_sum{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[1m])) by (user_id) or sum(rate(logging_googleapis_com:user_user_tokens{monitored_resource="audited_resource"}[1m])) by (user_id)` |
+| **Widget 3: Total Tokens Consumed per User** | `sum(increase(logging_googleapis_com:user_user_tokens_sum{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[1m])) by (user_id) or sum(increase(logging_googleapis_com:user_user_tokens{monitored_resource="audited_resource"}[1m])) by (user_id)` |
+| **Widget 4: API Request Count by User (Rate)** | `sum(rate(logging_googleapis_com:user_user_tokens_count{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[1m])) by (user_id) or sum(rate(logging_googleapis_com:user_user_tokens{monitored_resource="audited_resource"}[1m])) by (user_id)` |
+| **Widget 5: Model Types Utilized by User** | `sum(increase(logging_googleapis_com:user_user_tokens_sum{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[1m])) by (user_id, model_id) or sum(increase(logging_googleapis_com:user_user_tokens{monitored_resource="audited_resource"}[1m])) by (user_id, model_id)` |
+| **Widget 6: Total Tokens Consumed per User per Model (Table)** | `sum(increase(logging_googleapis_com:user_user_tokens_sum{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[${__interval}])) by (user_id, model_id) or sum(increase(logging_googleapis_com:user_user_tokens{monitored_resource="audited_resource"}[${__interval}])) by (user_id, model_id)` (with `"outputFullDuration": true`) |
+| **Widget 7: Total Tokens Consumed by Model (All Users)** | `sum(increase(logging_googleapis_com:user_user_tokens_sum{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[1m])) by (model_id) or sum(increase(logging_googleapis_com:user_user_tokens{monitored_resource="audited_resource"}[1m])) by (model_id)` |
+| **Widget 8: Real-Time Estimated Cost per User (Over Time)** | (Calculates real-time USD/min per user via union model-based scaling of exact token sums, falling back to estimated per-request averages if token counts are absent. PromQL vector addition is safeguarded with union `or` and outermost sum aggregation `by (user_id)`) |
+| **Widget 9: Total Estimated Cost per User (Table)** | (Aggregates total USD spend per user over any selected dashboard timeframe using `${__interval}` in `increase()` range vectors and `"outputFullDuration": true` for static grid summation, with an added `"currency": "USD"` metadata column) |
