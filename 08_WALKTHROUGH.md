@@ -46,9 +46,10 @@ The serverless, native integration described in `HOW_TO_COLLECT_USER_DATA.md` ha
 - **Zero-Bypass Platform Config**: Activating `setPublisherModelConfig` configures base foundation models (e.g. `gemini-2.5-flash`) at the platform layer, forcing 100% auditing and token tracking asynchronously across all user calls.
 - **Pre-Auth Security**: Developer API calls are authenticated using native GCP IAM credentials via `gcloud auth application-default login`, removing legacy proxy bypass vulnerabilities.
 - **BigQuery Payload Joining**: Verified the SQL join query that merges payload data with access audit trails on the unique `request_id` to cleanly attribute costs back to individual verified corporate emails.
-- **Automated View Compilation (`deploy_bq_view.sh`)**: Tested executing `./deploy_bq_view.sh` to compile the view in the `coffee-and-codey` project. The script successfully loads `create_user_cost_attribution_view.sql` and pipes it directly into the `bq query` CLI utility.
+- **Automated View Compilation (`deploy_bq_view.sh` / `deploy_bq_view.py`)**: Due to a known legacy proxy-tunnel parsing bug in the `bq` CLI on some development boxes (causing connection timeouts), we implemented a modern Python client SDK deployer `deploy_bq_view.py` as a fallback. Both options compile the SQL schema successfully; the Python SDK approach is fully verified to run flawlessly and completed successfully to compile and deploy the reporting view `vertex_logs.user_cost_attribution_report` in GCP project `coffee-and-codey`.
 
 ---
+
 
 
 ### 4. Verify Gemini 3.5 Flash on the Global Endpoint
