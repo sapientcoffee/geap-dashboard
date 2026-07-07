@@ -91,6 +91,29 @@ During implementation and dashboard loading, we diagnosed why some developer met
 
 ---
 
+### 6. Client-Side Payload Labeling (The Logical Global Endpoint Workaround)
+During deep diagnostics, we discovered that calls routed through the logical global endpoint (`aiplatform.googleapis.com` under `/locations/global`) do not emit standard `DATA_READ` GCP Cloud Audit Logs. This leaves audit logs empty, causing standard SQL joins to show `null` for `user_id`.
+
+To solve this elegantly on both regional and global endpoints, we successfully implemented **Client-Side Payload Labeling**:
+1. **Client-Side Injection**: Developers/SDKs inject standard request labels containing their corporate identity directly into the model request configuration (under `config.labels` or `labels`).
+2. **Unified BigQuery View Extraction**: We upgraded our reporting view (`coffee-and-codey.vertex_logs.user_cost_attribution_report`) to parse these labels natively from the `full_request` payload using a robust `COALESCE` query pattern:
+   ```sql
+   COALESCE(
+     JSON_VALUE(log.full_request, "$.labels.developer_email"),
+     JSON_VALUE(log.full_request, "$.config.labels.developer_email"),
+     JSON_VALUE(log.full_request, "$.labels.developer-email"),
+     JSON_VALUE(log.full_request, "$.config.labels.developer-email"),
+     audit.protopayload_auditlog.authenticationInfo.principalEmail,
+     "unlabeled_request"
+   ) AS user_id
+   ```
+3. **Execution & Proof**:
+   - We ran `test_labels.py` on the `global` endpoint, calling `gemini-3.5-flash` with the label `"developer_email": "test_developer_types@sapientcoffee.com"`.
+   - The model returned: *"Native labels parsed successfully!"*
+   - We executed `confirm_labels.py` to query the live reporting view. The view successfully extracted the user identity directly from the `full_request` JSON column, attributing exact token volumes (8 input, 5 output) and estimated cost ($0.000057) to `test_developer_types@sapientcoffee.com` with **zero dependency on Cloud Audit Logs**!
+
+---
+
 ## 🏁 Verification Script Execution Proof
 
 ```bash

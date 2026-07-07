@@ -4,7 +4,14 @@
 -- Create or replace the unified cost attribution report view
 CREATE OR REPLACE VIEW `coffee-and-codey.vertex_logs.user_cost_attribution_report` AS
 SELECT 
-  audit.protopayload_auditlog.authenticationInfo.principalEmail AS user_id,
+  COALESCE(
+    JSON_VALUE(log.full_request, "$.labels.developer_email"),
+    JSON_VALUE(log.full_request, "$.config.labels.developer_email"),
+    JSON_VALUE(log.full_request, "$.labels.developer-email"),
+    JSON_VALUE(log.full_request, "$.config.labels.developer-email"),
+    audit.protopayload_auditlog.authenticationInfo.principalEmail,
+    "unlabeled_request"
+  ) AS user_id,
   log.model AS model_id,
   log.logging_time AS call_timestamp,
   
