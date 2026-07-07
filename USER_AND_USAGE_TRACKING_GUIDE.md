@@ -74,8 +74,46 @@ For manual deployment, execute this SQL query in the BigQuery Studio console:
 
 ```sql
 CREATE OR REPLACE VIEW `coffee-and-codey.vertex_logs.user_cost_attribution_report` AS
+WITH trajectory_mapping AS (
+  -- Antigravity-Specific Optimization:
+  -- Map conversation trajectory_ids to the authentic principalEmail of the developer
+  -- using standard data-access audit logs written on any regional calls within that session.
+  SELECT DISTINCT
+    JSON_VALUE(log.full_request, "$.labels.trajectory_id") AS trajectory_id,
+    audit.protopayload_auditlog.authenticationInfo.principalEmail AS principal_email
+  FROM 
+    `coffee-and-codey.vertex_logs.request_response_logs` AS log
+  INNER JOIN 
+    `coffee-and-codey.cloudaudit_googleapis_com.data_access_2026` AS audit
+  ON 
+    JSON_VALUE(log.metadata, "$.request_id") = JSON_VALUE(audit.protopayload_auditlog.metadata, "$.request_id")
+  WHERE 
+    JSON_VALUE(log.full_request, "$.labels.trajectory_id") IS NOT NULL
+    AND audit.protopayload_auditlog.authenticationInfo.principalEmail IS NOT NULL
+)
 SELECT 
-  audit.protopayload_auditlog.authenticationInfo.principalEmail AS user_id,
+  COALESCE(
+    -- 1. Direct developer_email labels (e.g. from custom client overrides)
+    JSON_VALUE(log.full_request, "$.labels.developer_email"),
+    JSON_VALUE(log.full_request, "$.config.labels.developer_email"),
+    JSON_VALUE(log.full_request, "$.labels.developer-email"),
+    JSON_VALUE(log.full_request, "$.config.labels.developer-email"),
+    
+    -- 2. Antigravity Trajectory Mapping: Automatically resolve the developer's email 
+    -- from conversation context even on logical global endpoints (No Audit Logs required!)
+    map.principal_email,
+    
+    -- 3. Fallback to direct request_id audit log join for this specific call (regional only)
+    audit.protopayload_auditlog.authenticationInfo.principalEmail,
+    
+    -- 4. Unlabeled placeholder
+    "unlabeled_request"
+  ) AS user_id,
+  
+  -- Antigravity Session Identifiers for rich dashboard reporting
+  JSON_VALUE(log.full_request, "$.labels.trajectory_id") AS antigravity_trajectory_id,
+  JSON_VALUE(log.full_request, "$.labels.last_execution_id") AS antigravity_execution_id,
+  
   log.model AS model_id,
   log.logging_time AS call_timestamp,
   
@@ -102,13 +140,21 @@ SELECT
         (CAST(JSON_VALUE(log.full_response, "$.usageMetadata.candidatesTokenCount") AS FLOAT64) * 0.00000500)
       ELSE 0.0
     END, 6
-  ) AS estimated_cost_usd
+  ) AS estimated_cost_usd,
+  
+  -- Raw Text Payload Extraction
+  JSON_VALUE(log.full_request, "$.contents[0].parts[0].text") AS user_prompt,
+  JSON_VALUE(log.full_response, "$.candidates[0].content.parts[0].text") AS model_response
 FROM 
   `coffee-and-codey.vertex_logs.request_response_logs` AS log
-INNER JOIN 
+LEFT OUTER JOIN 
   `coffee-and-codey.cloudaudit_googleapis_com.data_access_2026` AS audit
 ON 
-  JSON_VALUE(log.metadata, "$.request_id") = JSON_VALUE(audit.protopayload_auditlog.metadata, "$.request_id");
+  JSON_VALUE(log.metadata, "$.request_id") = JSON_VALUE(audit.protopayload_auditlog.metadata, "$.request_id")
+LEFT OUTER JOIN 
+  trajectory_mapping AS map
+ON 
+  JSON_VALUE(log.full_request, "$.labels.trajectory_id") = map.trajectory_id;
 ```
 
 ### Step 2: Build a Looker Studio Report
@@ -144,3 +190,51 @@ To force the Antigravity CLI (`agy`) on developer workstations to target a regio
 | **Cloud Logging** | **$0.00** | First **50 GiB/month** per project is completely free. Overages are billed at $0.50/GiB. |
 | **BigQuery Ingest & Store** | **$0.00** | BigQuery provides **10 GiB** of free storage and **1 TiB** of free query processing per month. |
 | **Custom Log-Based Metrics** | **$0.00** | GCM custom metrics are free up to **150 MiB/month** per project. Overages are $0.30 per million samples. |
+
+---
+
+## 🛑 The Per-User Dashboard Feasibility & Technical History
+
+Administrators often ask if we can provide a **dedicated, isolated "Per-User Dashboard"** (where each developer logs in and can only see their own metrics, costs, and token usage) inside Google Cloud Monitoring (GCM). 
+
+While our **Unified Dashboard v2** lists all developers and aggregates usage transparently across the team, serving dynamically filtered, isolated dashboard views *per logged-in developer* is technically unfeasible in GCM. 
+
+Below is an in-depth explanation of the technical barriers and a historical log of all alternative architectures that have been tested and evaluated.
+
+### 1. Why Per-User Isolated Dashboards are Unfeasible in GCM
+
+* **Lack of Dynamic Viewer Context**: GCM dashboards are static, shared project-level resources. There is no native PromQL, MQL, or dashboard-level variable (such as `current_user()`, `session.viewer_email`, or `iam.principal`) that can dynamically filter chart timeseries data based on the identity of the Google Cloud console viewer.
+* **Lack of Row-Level Access Controls**: GCM permissions are managed at the project level (`roles/monitoring.viewer`). If a developer has permission to view GCM dashboards, they can view all custom metrics, including the `user_tokens` metric containing other developers' emails. There is no native way to restrict metric timeseries access at the row or label level.
+* **Label Cardinality Limits**: Creating high-cardinality labels (e.g., thousands of unique developer email strings) on GCM distribution metrics causes "cardinality bloat." GCM heavily penalizes or drops timeseries points when label value cardinality is too high, making direct dashboard plotting of individual developer emails unreliable for large organizations.
+
+---
+
+### 2. Historical Summary of Attempted Solutions & Architectural Boundaries
+
+During our technical discovery and design iterations, several alternative architectures were built and tested to overcome these limitations. Each hit specific GCP platform or security boundaries:
+
+#### ❌ Attempt 1: Direct Local Terminal Telemetry Pulling via CLI
+* **The Idea**: Instead of using the Google Cloud Console, have the `agy` CLI pull the current developer's token usage and cost metrics directly from BigQuery or GCM and render a private, per-user ASCII dashboard locally in the terminal.
+* **The Failure (Security/Least Privilege)**: To query BigQuery cost views or GCM metrics, every developer's workstation would need to be granted `roles/bigquery.user` or `roles/monitoring.viewer` permissions on the central logging dataset. This violates the principle of least privilege, as any developer could bypass the CLI and query raw request-response tables containing other developers' prompt text and response payloads.
+
+#### ❌ Attempt 2: Dynamic Provisioning of Per-User GCM Dashboard Assets
+* **The Idea**: Programmatically generate and push a distinct dashboard JSON file to GCM for every developer (e.g., `dashboard-robedwards.json`, `dashboard-alice.json`), hard-filtering each dashboard's queries to that specific developer's email.
+* **The Failure (Scale & Configuration Drift)**: This pattern is highly unscalable. Creating, updating, and deleting individual dashboards as developers join, leave, or change teams creates immense administrative drift. It also quickly exhausts GCP’s project-level dashboard resource quotas.
+
+#### ❌ Attempt 3: Native Payload User-Extraction on the Global Endpoint
+* **The Idea**: Extracting the authenticated developer's identity directly from native OpenTelemetry (OTel) request-response payload logs on the logical global endpoint.
+* **The Failure (Compliance & Privacy Enforcements)**: To protect developer privacy and comply with data governance, Google's native, platform-level request-response log streams strictly redact human-identifiable metadata (such as verified emails or workstation names) from raw payloads. This made direct extraction of user identities from OTel payloads alone impossible on global endpoints.
+
+#### ❌ Attempt 4: Extracting User Identities from Global Audit Logs
+* **The Idea**: Joining global endpoint request-response logs with logical global audit logs on `request_id`.
+* **The Failure (GCP Auditing Limitation)**: GCP does not write standard data-access audit logs for calls routed through the logical global endpoint (`aiplatform.googleapis.com` under `/locations/global`), leaving the audit logs completely empty and making matching impossible.
+
+---
+
+### 🏆 The Approved Architecture (The Best of Both Worlds)
+
+To overcome all of the security, scale, and platform limitations listed above, the approved architecture splits the problem into two distinct, optimized patterns:
+
+1. **The Shared Operational Dashboard (GCM Dashboard v2)**: Use Cloud Monitoring for high-level team monitoring, capacity planning, and model performance. Charts are grouped and aggregated dynamically using high-performance PromQL fallbacks to prevent cardinality bloat, with setup instructions embedded directly inside the dashboard.
+2. **The Secure Financial Report (Looker Studio + BigQuery View)**: For individual developer cost attribution and chargebacks, use our deployed BigQuery view `vertex_logs.user_cost_attribution_report` to join payloads with regional audit trails and trajectory mappings. Since Looker Studio supports **Row-Level Security (RLS)** and BigQuery supports **Authorized Views**, administrators can easily configure a single Looker Studio report that securely and dynamically displays only the logged-in developer's cost data, keeping the database secure and private.
+
