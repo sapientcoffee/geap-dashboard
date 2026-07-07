@@ -38,7 +38,7 @@ SELECT
   JSON_VALUE(log.full_response, "$.candidates[0].content.parts[0].text") AS model_response
 FROM 
   `coffee-and-codey.vertex_logs.request_response_logs` AS log
-INNER JOIN 
+LEFT OUTER JOIN 
   `coffee-and-codey.cloudaudit_googleapis_com.data_access_2026` AS audit
 ON 
   JSON_VALUE(log.metadata, "$.request_id") = JSON_VALUE(audit.protopayload_auditlog.metadata, "$.request_id");
