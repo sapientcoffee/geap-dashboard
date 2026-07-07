@@ -20,6 +20,9 @@ Both custom log-based metrics configurations have been validated using `PyYAML`:
 - [x] Python SDK reference snippet in `HOW_TO_COLLECT_USER_DATA.md` verified for programmatic base foundation model configuration using `GenerativeModel.set_request_response_logging_config()`.
 - [x] REST API/curl config payload schema verified to comply with Google Cloud's `PublisherModelConfig` spec (`samplingRate`, `bigqueryDestination`, and `enableOtelLogging`).
 - [x] SQL view join query in `USER_AND_USAGE_TRACKING_GUIDE.md` verified to perfectly correlate identities with tokens by joining `request_response_logs` and `data_access` on `request_id`.
+- [x] **create_user_cost_attribution_view.sql**: Verified SQL syntax correctness. Uses the modern standard GoogleSQL `JSON_VALUE` function instead of legacy `JSON_EXTRACT_SCALAR`.
+- [x] **deploy_bq_view.sh**: Shell script syntax verified via standard POSIX linter and execution permission (`chmod +x`) applied.
+
 
 ---
 

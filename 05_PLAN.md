@@ -22,6 +22,10 @@ This execution plan breaks down the user cost and token tracking dashboard enhan
 *   **Objective**: Reflect the new cost-tracking features and blended metrics in `USER_AND_USAGE_TRACKING_GUIDE.md` and `walkthrough.md`.
 *   **Contract**: Accurate pricing explanation matching spec.
 
+### Slice 5: BigQuery Identity-Join Cost view [Serial]
+*   **Objective**: Build and package automated SQL view schema and deployment scripts for high-fidelity cost attribution reports in BigQuery.
+*   **Contract**: Correct Standard GoogleSQL syntax using `JSON_VALUE`. Automate view compilation via standard `bq query`.
+
 ---
 
 ## 2. Implementation Checklist
@@ -36,3 +40,7 @@ This execution plan breaks down the user cost and token tracking dashboard enhan
 - [x] **Task 4: Update Reference Guides & Walkthrough**
   - Document user-level cost calculations in `USER_AND_USAGE_TRACKING_GUIDE.md`.
   - Compile proof walkthrough inside `walkthrough.md` and `08_WALKTHROUGH.md`.
+- [x] **Task 5: Implement BigQuery SQL View and Deploy Scripts**
+  - Create standard SQL view file `create_user_cost_attribution_view.sql`.
+  - Create standard shell deployment script `deploy_bq_view.sh` and make executable.
+

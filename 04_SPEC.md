@@ -97,3 +97,20 @@ To ensure developer calls are fully captured by regional GCM metric ingestion sc
      "location": "us-central1"
    }
    ```
+
+---
+
+## 6. BigQuery Cost Attribution View & Deployment Script Spec
+To ensure high-fidelity financial auditability:
+1.  **View SQL Spec (`create_user_cost_attribution_view.sql`)**:
+    *   Defines a standard `CREATE OR REPLACE VIEW` statement targeting the dataset/view `vertex_logs.user_cost_attribution_report`.
+    *   Uses Standard GoogleSQL `JSON_VALUE` for parsing scalar keys from nested JSON.
+    *   Applies standard list pricing calculations for input and output tokens:
+        *   Gemini 3.5 Flash: $0.00000150 (input), $0.00000900 (output)
+        *   Gemini 3.1 Pro: $0.00000200 (input), $0.00001200 (output)
+        *   Gemini 2.5 Flash: $0.000000075 (input), $0.00000030 (output)
+        *   Gemini 1.5 Pro: $0.00000125 (input), $0.00000500 (output)
+2.  **Deploy Script Spec (`deploy_bq_view.sh`)**:
+    *   Target shell: Bash.
+    *   Authenticates and executes view code via standard `bq query --project_id=coffee-and-codey --use_legacy_sql=false` using file input redirection.
+

@@ -45,6 +45,7 @@ This enhancement extends **Dashboard v2 (User Token Tracker)** to support fine-g
 *   **Developer Cost-over-Time Widget**: A new XYChart (Line) in Dashboard v2 plotting real-time estimated USD cost per minute per user.
 *   **Developer Total Cost Summary Widget**: A new TimeSeriesTable with `outputFullDuration: true` displaying the cumulative USD cost for each developer over the selected timeframe with an explicit `"USD"` currency column.
 *   **Enhanced Per-User Model Breakdowns**: Refine and rename the per-user model breakdown tables and charts to make per-user token volumes by model incredibly prominent and easy to read.
+*   **Automated BigQuery Identity-Join View**: Packages `create_user_cost_attribution_view.sql` and `deploy_bq_view.sh` to allow administrators to deploy high-fidelity corporate cost attribution pipelines effortlessly in BigQuery.
 
 ### Acceptance Criteria
 
@@ -56,3 +57,5 @@ This enhancement extends **Dashboard v2 (User Token Tracker)** to support fine-g
 | **AC-4** | **Developer Cost Over Time** | Line chart dynamically sums and plots estimated USD cost per minute per user using correct pricing formulas. |
 | **AC-5** | **Developer Total Cost Summary** | A timeframe-responsive table sums and lists total USD cost per user, displaying user IDs, total costs, and an explicit `"USD"` currency column. |
 | **AC-6** | **Per-User Token Consumption** | Dedicated table and bar chart clearly show exact token count consumption per user, broken down by model ID. |
+| **AC-7** | **BigQuery SQL View Scripting** | Provide a valid, executable SQL schema file and executable shell deployment script to automatically build the unified identity cost view in BigQuery. |
+

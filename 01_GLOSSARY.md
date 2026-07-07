@@ -28,3 +28,6 @@ This glossary defines the ubiquitous language for the Developer AI Tools Monitor
 | **Regional Endpoint Routing** | Directing model API calls through regional locations (e.g. `us-central1`) to ensure standard Cloud Logging audit trails are generated. | Ingestion |
 | **locations/global Auditing Limitation** | The logical multi-region endpoint `global` does not write standard `DATA_READ` audit logs to Cloud Logging, preventing user mapping on GCM. | Ingestion |
 | **settings.json Configuration** | Local file at `~/.gemini/antigravity-cli/settings.json` where developers specify target GCP project and regional locations (e.g. `us-central1`). | Configuration |
+| **`user_cost_attribution_report`** | The consolidated BigQuery reporting SQL view which merges payload logs with IAM data access audit events, enabling user-level financial calculations. | Database View |
+| **Identity Join** | An `INNER JOIN` in BigQuery connecting `request_response_logs` and `data_access` on the `request_id` field to map unredacted prompt/token sizes back to authenticated corporate emails. | Database View |
+

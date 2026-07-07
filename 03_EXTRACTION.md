@@ -92,3 +92,19 @@ To render tables responsive to time ranges selected in GCM dashboards, we must u
 *   **The Global Location Auditing Gap**: Calls made to the logical `locations/global` endpoint do not publish Data Access `DATA_READ` audit logs to Cloud Logging.
 *   **Regional Endpoint Auditing**: Regional endpoints (such as `locations/us-central1`) write complete Data Access audit logs containing caller identities (`principalEmail`).
 *   **Metric Mapping**: The custom log-based metric `user_tokens` under Option 1 (No-Code Audit Logs) filters by `protoPayload.serviceName="aiplatform.googleapis.com"`. Since global calls do not write audit logs, they are invisible to the metric filter and do not appear in GCM timeseries, resulting in blank lines on GCM Dashboard v2. Shifting calls to regional locations (like `us-central1`) ensures 100% of invocations are tracked.
+
+---
+
+## 6. BigQuery Request-Response Logging Schemas
+For high-fidelity analytical cost attribution (Pattern B), we extract logs from:
+1.  **`vertex_logs.request_response_logs`**:
+    *   `logging_time` (TIMESTAMP): Time log was generated.
+    *   `request_id` (STRING): Unique token payload reference.
+    *   `model` (STRING): Base model identifier.
+    *   `full_request` (JSON): Contains input text prompt (`contents` array).
+    *   `full_response` (JSON): Contains output generation and `usageMetadata` (`promptTokenCount`, `candidatesTokenCount`).
+    *   `metadata` (JSON): Latency metrics (e.g. `{"latency": "0.45s"}`).
+2.  **`cloudaudit_googleapis_com.data_access_2026`**:
+    *   `protopayload_auditlog.authenticationInfo.principalEmail` (STRING): Identity of caller.
+    *   `protopayload_auditlog.metadata.request_id` (STRING): Correlating transaction ID.
+
