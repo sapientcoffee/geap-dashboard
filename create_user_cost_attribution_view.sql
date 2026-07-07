@@ -31,7 +31,11 @@ SELECT
         (CAST(JSON_VALUE(log.full_response, "$.usageMetadata.candidatesTokenCount") AS FLOAT64) * 0.00000500)
       ELSE 0.0
     END, 6
-  ) AS estimated_cost_usd
+  ) AS estimated_cost_usd,
+  
+  -- Raw Text Payload Extraction
+  JSON_VALUE(log.full_request, "$.contents[0].parts[0].text") AS user_prompt,
+  JSON_VALUE(log.full_response, "$.candidates[0].content.parts[0].text") AS model_response
 FROM 
   `coffee-and-codey.vertex_logs.request_response_logs` AS log
 INNER JOIN 
