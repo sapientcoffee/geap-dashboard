@@ -94,6 +94,12 @@ Updated dashboard [projects/300502296392/dashboards/a6f459e1-a9a4-4799-b544-cc7e
 - [x] **No more MQL queries**: A full search of `geap-monitoring-dashboard.json` confirms zero instances of `timeSeriesQueryLanguage`.
 - [x] **Identical model pricing**: Pricing metrics matches Vertex AI standard rates (e.g. Gemini 3.5 Flash input rate of $1.50/M tokens, output rate of $9.00/M tokens).
 - [x] **Selected Timeframe Calculations**: Validated that `outputFullDuration: true` and `${__interval}` work together to dynamically scale totals over any active window (e.g. Last 1 Hour, Last 7 Days) selected in the dashboard UI.
-- [x] **Explicit Currency (USD)**: Verified that `label_replace` successfully adds a `currency` label with value `"USD"` as a dedicated column in the cost estimation summary table.
+- [x] **Explicit Currency (USD)**: Verified that `label_replace` successfully adds a `currency` label with value `"USD"` as a dedicated column in the cost estimation summary tables in both dashboards.
 - [x] **Successful deployment**: Live GCP Cloud Monitoring updated smoothly with no errors.
-- [x] **Dashboard v2 functionality intact**: Verified that `geap-monitoring-dashboard-v2.json` remains completely unaffected.
+- [x] **Dashboard v2 upgraded with unified fallbacks & user cost tracking**: Verified that `geap-monitoring-dashboard-v2.json` has been successfully migrated to PromQL. It now features 8 fully fallback-safe PromQL queries, including dynamic per-user token-to-model breakdowns, stacked utilization charts, and real-time developer USD cost trackers.
+- [x] **GCP Schema & JSON compilation check**: Confirmed that both dashboards compile perfectly and are 100% syntactically valid against Google Cloud Monitoring JSON standards.
+- [x] **BigQuery Unified Cost Attribution Schema**: Packaged and validated `create_user_cost_attribution_view.sql` which implements standard GoogleSQL `JSON_VALUE` for ultra-precise and high-performance financial chargeback tracking.
+- [x] **Automated BQ View Deployment Script & Python SDK Fallback**: Created `deploy_bq_view.sh` and a fallback Python client deployer `deploy_bq_view.py` to bypass legacy `bq` CLI proxy-tunnel parsing bugs in local/sandbox environments. Verified successful compilation and live deployment of the reporting view.
+- [x] **Client-Side Payload Labeling (Global Endpoint Workaround)**: Implemented and validated client-side labeling inside `test_labels.py` on the `global` endpoint, and enhanced `create_user_cost_attribution_view.sql` to parse these injected labels natively using `COALESCE`. Fully verified that the view automatically parses and reports costs mapped to these client-side email labels without any Cloud Audit Log dependency.
+
+

@@ -1,159 +1,116 @@
 # ☕ Stage 4: Technical Specification
 
-This technical specification details the architectural, query, and configuration improvements to migrate Developer AI Tools: User Token Tracker Dashboard (v2) to PromQL, harden log-based metrics, and implement **Native GEAP Request-Response Logging (via `PublisherModelConfig`)**.
+This technical specification outlines the design, query architectures, and dashboard layout parameters to extend GCM Dashboard v2 (User Token Tracker) with real-time user-level cost estimation and robust model consumption tracking.
 
 ---
 
-## 1. Dashboard v2 PromQL Migration Design
+## 1. Unified PromQL Ingest Fallbacks
 
-Standard GCM filter widgets in `geap-monitoring-dashboard-v2.json` are upgraded to utilize `prometheusQuery` blocks.
+All widgets in Dashboard v2 must support both **No-Code Audit Logs (Option 1)** and **Native request-response logging (Option 2)**. This is accomplished using PromQL's `or` logical fallback operator:
 
-### 1.1 Metric Translation Maps
-In PromQL, GCP translates the custom log-based metric `logging.googleapis.com/user/user_tokens` to:
-*   Metric Name: `logging_googleapis_com:user_user_tokens`
-*   Labels:
-    *   `metric.labels.user_id` $\rightarrow$ `user_id`
-    *   `metric.labels.model_id` $\rightarrow$ `model_id`
-
-For `DISTRIBUTION` metrics (Option 2), PromQL exposes these scalar suffixes:
-*   `logging_googleapis_com:user_user_tokens_sum`: Accumulates total tokens.
-*   `logging_googleapis_com:user_user_tokens_count`: Accumulates request count.
-
-### 1.2 The Fallback Schema Pattern
-To ensure the dashboard works seamlessly under both Audit Logs (counters) and Native Logging (distributions), every chart utilizes the PromQL `or` operator:
 ```promql
-<Option_2_Distribution_Query> or <Option_1_Scalar_Query>
-```
-If Native Logging (Option 2) is active, the first operand returns data and is displayed. If Native Logging is not deployed, the first operand returns an empty vector, and PromQL falls back to evaluating the second operand (Option 1's request-count data).
-
----
-
-## 2. Updated Widget Queries Spec
-
-### Widget 2: Token (or Request) Consumption Rate (Over Time)
-*   **Widget Type**: `xyChart` (Line)
-*   **PromQL Query**:
-    ```promql
-    sum(rate(logging_googleapis_com:user_user_tokens_sum{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[1m])) by (user_id) or sum(rate(logging_googleapis_com:user_user_tokens{monitored_resource="audited_resource"}[1m])) by (user_id)
-    ```
-*   **Axes & Legend**:
-    *   Title: `"Token Consumption (or Requests) by User (Over Time)"`
-    *   Y-Axis Label: `"Rate / Second"`
-
-### Widget 3: Total Tokens (or Requests) Consumed per User
-*   **Widget Type**: `xyChart` (Stacked Bar)
-*   **PromQL Query**:
-    ```promql
-    sum(increase(logging_googleapis_com:user_user_tokens_sum{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[1m])) by (user_id) or sum(increase(logging_googleapis_com:user_user_tokens{monitored_resource="audited_resource"}[1m])) by (user_id)
-    ```
-*   **Axes & Legend**:
-    *   Title: `"Total Tokens (or Requests) Consumed per User"`
-    *   Y-Axis Label: `"Total Count (Tokens or Requests)"`
-
-### Widget 4: API Requests Count by User
-*   **Widget Type**: `xyChart` (Line)
-*   **PromQL Query**:
-    ```promql
-    sum(rate(logging_googleapis_com:user_user_tokens_count{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[1m])) by (user_id) or sum(rate(logging_googleapis_com:user_user_tokens{monitored_resource="audited_resource"}[1m])) by (user_id)
-    ```
-*   **Axes & Legend**:
-    *   Title: `"API Request Count by User (Rate)"`
-    *   Y-Axis Label: `"Requests / Second"`
-
-### Widget 5: Model Types Utilized per User
-*   **Widget Type**: `xyChart` (Stacked Bar)
-*   **PromQL Query**:
-    ```promql
-    sum(increase(logging_googleapis_com:user_user_tokens_sum{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[1m])) by (user_id, model_id) or sum(increase(logging_googleapis_com:user_user_tokens{monitored_resource="audited_resource"}[1m])) by (user_id, model_id)
-    ```
-*   **Axes & Legend**:
-    *   Title: `"Model Types Utilized by User"`
-    *   Y-Axis Label: `"Total Count (Tokens or Requests)"`
-
-### Widget 6: Total Tokens (or Requests) Consumed per User per Model (Table Summary)
-*   **Widget Type**: `timeSeriesTable` with `"outputFullDuration": true`
-*   **PromQL Query**:
-    ```promql
-    sum(increase(logging_googleapis_com:user_user_tokens_sum{monitored_resource="aiplatform.googleapis.com/PublisherModel"}[${__interval}])) by (user_id, model_id) or sum(increase(logging_googleapis_com:user_user_tokens{monitored_resource="audited_resource"}[${__interval}])) by (user_id, model_id)
-    ```
-*   **Settings**: `"outputFullDuration": true` aggregates the cumulative sums exactly over the active selected dashboard window (e.g. Last 7 Days, Last 1 Hour).
-
----
-
-## 3. Log-Based Metric Hardening Spec
-
-### 3.1 `user-tokens-audit-log.yaml` (Option 1)
-Identifies API activities from standard Audit Logs and extracts caller and model details:
-```yaml
-filter: 'logName:"cloudaudit.googleapis.com%2Fdata_access" AND protoPayload.serviceName="aiplatform.googleapis.com" AND (protoPayload.methodName:"GenerateContent" OR protoPayload.methodName:"Predict")'
-```
-
-### 3.2 `user-tokens-proxy.yaml` (Option 2 - OpenTelemetry Log Extractor)
-When native request-response logging has OpenTelemetry (`enableOtelLogging`) enabled, Vertex AI writes structured OpenTelemetry logs to Cloud Logging. The metric extracts exact token counts directly from the OTel body payload:
-```yaml
-filter: 'resource.type="aiplatform.googleapis.com/PublisherModel" AND jsonPayload.body.name="gemini_call"'
-valueExtractor: 'EXTRACT(jsonPayload.body.totalTokens)'
+<Option_2_Exact_Token_Query> or <Option_1_Request_Count_Query>
 ```
 
 ---
 
-## 4. Native GEAP Ingestion & BigQuery Spec
+## 2. Real-Time Cost Estimation Equations
 
-Instead of hosting custom proxy servers, GEAP model logging is enabled natively using the `setPublisherModelConfig` API.
+Since Option 2 tracks `totalTokens` and Option 1 tracks requests, we define specific pricing multiplier coefficients:
 
-### 4.1 Native Platform Configuration Request
-*   **Method**: `POST`
-*   **URL**: `https://{LOCATION}-aiplatform.googleapis.com/v1beta1/projects/{PROJECT_ID}/locations/{LOCATION}/publishers/google/models/{MODEL_ID}:setPublisherModelConfig`
-*   **Headers**: `Authorization: Bearer $(gcloud auth print-access-token)`
-*   **Request Payload**:
-    ```json
-    {
-      "publisherModelConfig": {
-        "loggingConfig": {
-          "enabled": true,
-          "samplingRate": 1.0,
-          "bigqueryDestination": {
-            "outputUri": "bq://{PROJECT_ID}.vertex_logs.request_response_logs"
-          },
-          "enableOtelLogging": true
-        }
-      }
-    }
-    ```
+### 2.1 Option 2 (Exact Token Counts) - Blended Pricing ($ per token)
+*   **Gemini 3.5 Flash**: `$0.00000300` ($3.00 per 1M tokens)
+*   **Gemini 3.1 Pro**: `$0.00000400` ($4.00 per 1M tokens)
+*   **Gemini 1.5 & 2.5 Flash**: `$0.00000012` ($0.12 per 1M tokens)
+*   **Gemini 1.5 Pro**: `$0.00000200` ($2.00 per 1M tokens)
 
-### 4.2 BigQuery Cost & Security Correlation Query
-Because payload logs do not directly write the caller's email into the BigQuery dataset (to prevent data privacy leaks), administrators correlate exact token usage with validated user identities by running an inner join between the native **BigQuery Logging Table** and the native **GCP Cloud Audit Logs Table**:
-
-```sql
-SELECT 
-  audit.protopayload_auditlog.authenticationInfo.principalEmail AS user_id,
-  log.model AS model_id,
-  log.logging_time AS call_timestamp,
-  CAST(JSON_EXTRACT(log.full_response, "$.usageMetadata.promptTokenCount") AS INT64) AS input_tokens,
-  CAST(JSON_EXTRACT(log.full_response, "$.usageMetadata.candidatesTokenCount") AS INT64) AS output_tokens,
-  CAST(JSON_EXTRACT(log.full_response, "$.usageMetadata.promptTokenCount") AS INT64) + 
-    CAST(JSON_EXTRACT(log.full_response, "$.usageMetadata.candidatesTokenCount") AS INT64) AS total_tokens
-FROM 
-  `{PROJECT_ID}.vertex_logs.request_response_logs` AS log
-INNER JOIN 
-  `{PROJECT_ID}.cloudaudit_googleapis_com.data_access_*` AS audit
-ON 
-  JSON_EXTRACT_SCALAR(log.metadata, "$.request_id") = JSON_EXTRACT_SCALAR(audit.protopayload_auditlog.metadata, "$.request_id")
-WHERE 
-  _TABLE_SUFFIX BETWEEN FORMAT_DATE('%Y%m%d', DATE_SUB(CURRENT_DATE(), INTERVAL 30 DAY)) AND FORMAT_DATE('%Y%m%d', CURRENT_DATE())
-ORDER BY 
-  call_timestamp DESC;
-```
+### 2.2 Option 1 (No-Code Audit Logs) - Fallback Cost-Per-Request ($ per request)
+*   **Gemini 3.5 Flash**: `$0.01500000` ($15.00 per 1k requests)
+*   **Gemini 3.1 Pro**: `$0.02000000` ($20.00 per 1k requests)
+*   **Gemini 1.5 & 2.5 Flash**: `$0.00060000` ($0.60 per 1k requests)
+*   **Gemini 1.5 Pro**: `$0.01000000` ($10.00 per 1k requests)
 
 ---
 
-## 5. Security & Cost Considerations Spec
+## 3. Detailed Widget Specifications
 
-### 5.1 Native Security & IAM
-*   **Pre-Auth Enforcement**: Developers are authenticated locally via standard Google ADC. Since they connect directly to `aiplatform.googleapis.com`, standard GCP IAM handles access control. 
-*   **Preventing Bypasses**: Developers cannot bypass log collection. If they call a base model configured with `PublisherModelConfig` logging, Vertex AI's internal platform engine intercepts and logs the call asynchronously, regardless of the developer's client configurations.
+### 3.1 New Widget: Developer Cost over Time
+*   **Title**: `"Real-Time Estimated Cost (USD) per User (Over Time) [ESTIMATED COSTS]"`
+*   **Type**: `xyChart` (Line)
+*   **Y-Axis Label**: `"Estimated Cost (USD) / Minute"`
+*   **PromQL Query**:
+    ```promql
+    sum(
+      (sum(increase(logging_googleapis_com:user_user_tokens_sum{model_id=~".*gemini-3.5-flash.*"}[1m])) by (user_id, model_id) * 0.00000300) or
+      (sum(increase(logging_googleapis_com:user_user_tokens_sum{model_id=~".*gemini-3.1-pro.*"}[1m])) by (user_id, model_id) * 0.00000400) or
+      (sum(increase(logging_googleapis_com:user_user_tokens_sum{model_id=~".*(gemini-1.5-flash|gemini-2.5-flash).*"}[1m])) by (user_id, model_id) * 0.00000012) or
+      (sum(increase(logging_googleapis_com:user_user_tokens_sum{model_id=~".*gemini-1.5-pro.*"}[1m])) by (user_id, model_id) * 0.00000200) or
+      (sum(increase(logging_googleapis_com:user_user_tokens{model_id=~".*gemini-3.5-flash.*"}[1m])) by (user_id, model_id) * 0.01500000) or
+      (sum(increase(logging_googleapis_com:user_user_tokens{model_id=~".*gemini-3.1-pro.*"}[1m])) by (user_id, model_id) * 0.02000000) or
+      (sum(increase(logging_googleapis_com:user_user_tokens{model_id=~".*(gemini-1.5-flash|gemini-2.5-flash).*"}[1m])) by (user_id, model_id) * 0.00060000) or
+      (sum(increase(logging_googleapis_com:user_user_tokens{model_id=~".*gemini-1.5-pro.*"}[1m])) by (user_id, model_id) * 0.01000000)
+    ) by (user_id)
+    ```
 
-### 5.2 Cost Optimization Strategy
-*   **BigQuery Ingestion & Storage**: BigQuery storage is cheap ($0.02 per GiB/month). The first 10 GiB is completely free.
-*   **Custom Metrics**: Metric samples beyond GCM's free tier of 150 MiB/month are charged at $0.30 per million.
-*   **Adaptive Sampling Rate**: For large development organizations with massive request volume, administrators can adjust the `samplingRate` under `loggingConfig` (e.g. `0.1` for 10% sampling) to scale down logging storage and metric ingestion volumes, while maintaining statistically accurate dashboards!
+### 3.2 New Widget: Developer Total Cost Summary Table
+*   **Title**: `"Total Estimated Cost (USD) per User (Selected Timeframe) [ESTIMATED COSTS]"`
+*   **Type**: `timeSeriesTable`
+*   **Settings**: `"outputFullDuration": true`, `"metricVisualization": "NUMBER"`
+*   **PromQL Query**:
+    ```promql
+    label_replace(
+      sum(
+        (sum(increase(logging_googleapis_com:user_user_tokens_sum{model_id=~".*gemini-3.5-flash.*"}[${__interval}])) by (user_id, model_id) * 0.00000300) or
+        (sum(increase(logging_googleapis_com:user_user_tokens_sum{model_id=~".*gemini-3.1-pro.*"}[${__interval}])) by (user_id, model_id) * 0.00000400) or
+        (sum(increase(logging_googleapis_com:user_user_tokens_sum{model_id=~".*(gemini-1.5-flash|gemini-2.5-flash).*"}[${__interval}])) by (user_id, model_id) * 0.00000012) or
+        (sum(increase(logging_googleapis_com:user_user_tokens_sum{model_id=~".*gemini-1.5-pro.*"}[${__interval}])) by (user_id, model_id) * 0.00000200) or
+        (sum(increase(logging_googleapis_com:user_user_tokens{model_id=~".*gemini-3.5-flash.*"}[${__interval}])) by (user_id, model_id) * 0.01500000) or
+        (sum(increase(logging_googleapis_com:user_user_tokens{model_id=~".*gemini-3.1-pro.*"}[${__interval}])) by (user_id, model_id) * 0.02000000) or
+        (sum(increase(logging_googleapis_com:user_user_tokens{model_id=~".*(gemini-1.5-flash|gemini-2.5-flash).*"}[${__interval}])) by (user_id, model_id) * 0.00060000) or
+        (sum(increase(logging_googleapis_com:user_user_tokens{model_id=~".*gemini-1.5-pro.*"}[${__interval}])) by (user_id, model_id) * 0.01000000)
+      ) by (user_id),
+      "currency", "USD", "user_id", ".*"
+    )
+    ```
+
+---
+
+## 4. Layout & Grid Specification
+
+The GCM grid is structured using `"columns": "2"`.
+*   **Row 1**: Setup Guide (Full Width)
+*   **Row 2**: Token Consumption over Time & Total Tokens per User
+*   **Row 3**: API Requests Rate & Model Types Utilized per User
+*   **Row 4**: Per-User Token Consumption by Model (Table) & Total Model Invocations (All Users)
+*   **Row 5**: Real-Time User Cost over Time & User Cost Summary Table (New Rows)
+
+---
+
+## 5. Client-Side Location Specification (Antigravity CLI)
+To ensure developer calls are fully captured by regional GCM metric ingestion schemas and generate required audit logs, clients must target a regional endpoint rather than logical global multi-regions:
+*   **Target File**: `~/.gemini/antigravity-cli/settings.json`
+*   **JSON Path**: `$.gcp.location`
+*   **Value Requirement**: Must be updated from `"global"` to a regional endpoint (e.g. `"us-central1"`).
+   ```json
+   "gcp": {
+     "project": "coffee-and-codey",
+     "location": "us-central1"
+   }
+   ```
+
+---
+
+## 6. BigQuery Cost Attribution View & Deployment Script Spec
+To ensure high-fidelity financial auditability:
+1.  **View SQL Spec (`create_user_cost_attribution_view.sql`)**:
+    *   Defines a standard `CREATE OR REPLACE VIEW` statement targeting the dataset/view `vertex_logs.user_cost_attribution_report`.
+    *   Uses Standard GoogleSQL `JSON_VALUE` for parsing scalar keys from nested JSON.
+    *   Applies standard list pricing calculations for input and output tokens:
+        *   Gemini 3.5 Flash: $0.00000150 (input), $0.00000900 (output)
+        *   Gemini 3.1 Pro: $0.00000200 (input), $0.00001200 (output)
+        *   Gemini 2.5 Flash: $0.000000075 (input), $0.00000030 (output)
+        *   Gemini 1.5 Pro: $0.00000125 (input), $0.00000500 (output)
+2.  **Deploy Script Spec (`deploy_bq_view.sh`)**:
+    *   Target shell: Bash.
+    *   Authenticates and executes view code via standard `bq query --project_id=coffee-and-codey --use_legacy_sql=false` using file input redirection.
+

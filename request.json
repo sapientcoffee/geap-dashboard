@@ -1,0 +1,12 @@
+{
+  "publisherModelConfig": {
+    "loggingConfig": {
+      "enabled": true,
+      "samplingRate": 1.0,
+      "bigqueryDestination": {
+        "outputUri": "bq://coffee-and-codey.vertex_logs.request_response_logs"
+      },
+      "enableOtelLogging": true
+    }
+  }
+}

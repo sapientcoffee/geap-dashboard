@@ -22,3 +22,12 @@ This glossary defines the ubiquitous language for the Developer AI Tools Monitor
 | **`_sum` / `_count` Suffixes** | Synthesised PromQL metrics (e.g. `user_tokens_sum`, `user_tokens_count`) exposed by GCM to extract scalar sums and sample counts from distribution metrics. | GCM |
 | **Timeframe Scaling** | Dynamic calculation of cumulative values (e.g., total cost, total tokens) over the user's selected dashboard window. Powered by GCM's `"outputFullDuration": true` and PromQL's `[${__interval}]` variable. | GCM |
 | **`outputFullDuration`** | A GCM dashboard parameter that aggregates time series values across the entire selected active timeframe into a single cumulative number instead of a time series chart. | GCM |
+| **Total Per-User Cost** | The sum of real-time estimated costs (in USD) incurred by an individual user, computed by multiplying model types and token consumption rates (or request counts) against standard list prices. | Financial |
+| **Blended Pricing Rate** | An estimated rate applied to a unified `totalTokens` count (which sums input and output tokens) based on an assumed typical developer workload proportion (e.g., 80% input tokens, 20% output tokens). | Financial |
+| **Per-User Token Consumption by Model** | Fine-grained developer-level tracking of exact token counts (or request counts if under fallback) grouped both by user identity and model ID over time. | Ingestion |
+| **Regional Endpoint Routing** | Directing model API calls through regional locations (e.g. `us-central1`) to ensure standard Cloud Logging audit trails are generated. | Ingestion |
+| **locations/global Auditing Limitation** | The logical multi-region endpoint `global` does not write standard `DATA_READ` audit logs to Cloud Logging, preventing user mapping on GCM. | Ingestion |
+| **settings.json Configuration** | Local file at `~/.gemini/antigravity-cli/settings.json` where developers specify target GCP project and regional locations (e.g. `us-central1`). | Configuration |
+| **`user_cost_attribution_report`** | The consolidated BigQuery reporting SQL view which merges payload logs with IAM data access audit events, enabling user-level financial calculations. | Database View |
+| **Identity Join** | An `INNER JOIN` in BigQuery connecting `request_response_logs` and `data_access` on the `request_id` field to map unredacted prompt/token sizes back to authenticated corporate emails. | Database View |
+

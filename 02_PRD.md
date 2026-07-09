@@ -4,46 +4,48 @@
 
 This product consists of Developer AI Tools Monitoring Dashboards and custom log-based metric templates that provide team leads and platform administrators visibility into model invocations, token consumption, response speeds, cost, and rate-limit experiences of developers calling the Vertex AI/Agent Platform (GEAP) API. 
 
-This update shifts the ingestion pattern of exact token usage from a custom logging proxy to **Native GEAP Request-Response Logging (via `PublisherModelConfig`)**, combining built-in Google Cloud IAM authentication with serverless log collection.
+This enhancement extends **Dashboard v2 (User Token Tracker)** to support fine-grained, real-time developer-level cost tracking and clear model-specific token breakdowns.
 
 ---
 
 ## 2. Problem Statement
 
 1.  **Dashboard Empty/Missing Data**: Standard local developer SDK or CLI (`agy`, `GeminiCLI`) calls directly query Vertex AI. Because Google Cloud does not natively write prompt payloads or token count metadata to standard Cloud Logging for privacy/security reasons, standard time-series dashboards are empty by default.
-2.  **Authentication & Security Bypass**: In custom proxy setups, developers can bypass the logging gateway entirely by unsetting environmental endpoints and calling the models directly. This circumvents corporate tracking. Additionally, any custom proxy middleware introduces security maintenance, authentication validation complexity, and additional Cloud Run compute costs.
-3.  **GCM Dashboard Crash Risks**: Plotting distribution metrics (like token counts) on standard GCM xyCharts without explicit scalar extraction causes dashboards to crash. We need robust PromQL query fallbacks to support both request volumes (from Audit Logs) and exact token consumption.
+2.  **Lack of Developer Cost Attribution**: While administrators can track aggregate cost trends in Dashboard v1, they cannot see real-time estimated costs mapped directly to individual developers in Dashboard v2. This makes it impossible to quickly identify which specific user is driving high spend or to perform real-time internal billing allocations.
+3.  **Ambiguity in Per-User Model Token Utilization**: While request rates are visible, a dedicated, high-fidelity view of exact token consumption per user, clearly broken down by model type, is missing. This is critical for assessing model selection efficiency across different engineering teams.
+4.  **Global Endpoint Audit Limitations**: In addition to standard payload omissions, calls targeting the logical `locations/global` multi-region endpoint do not write standard `DATA_READ` audit logs to Cloud Logging. This means GCM custom log-based metrics cannot extract user emails, causing user tracker dashboards to remain completely blank.
 
 ---
 
 ## 3. Goals & Non-Goals
 
 ### Goals
-*   **Zero-Bypass Native Authentication**: Enforce authentication and access control natively using **Google Cloud IAM**. Developers must be authenticated via local credentials (`gcloud auth application-default login`) before they can make any API calls.
-*   **Zero-Maintenance Ingestion**: Implement exact token tracking using GEAP's native **Request-Response Logging** (`PublisherModelConfig`), eliminating the need to compile, deploy, or pay for custom Cloud Run logging proxies.
-*   **Real-time & BigQuery Visibility**: Natively export exact request/response payloads (including prompt, output, and cached token sizes) to a BigQuery destination table and OpenTelemetry streams.
-*   **Zero-Crash Dashboard v2**: Ensure Dashboard v2 dynamically plots exact token volumes (via OTel/BigQuery extraction) when enabled, and gracefully falls back to request counts (via No-Code Audit Logs) otherwise.
-*   **Accurate Cost Auditing**: Allow administrators to run high-fidelity queries joining native audit logs (caller identity) with native payload logs (token counts) inside BigQuery for exact cost attribution.
+*   **Real-time Developer Cost Attribution**: Add real-time cost charts (over time) and tables (timeframe-responsive summaries) to Dashboard v2 to track estimated spend (in USD) for each individual developer.
+*   **Per-User Token Breakdown by Model**: Provide explicit, dedicated visualizations demonstrating exactly how many tokens (or fallback request volumes) each developer consumed on each specific model.
+*   **Zero-Crash PromQL Fallbacks**: Retain and expand the unified PromQL fallback scheme (`or` operator) to support both Audit Log counters (Option 1) and exact distribution metrics (Option 2) seamlessly across all new widgets.
+*   **Standardized Blended Pricing**: Implement correct standard price multipliers for developer models (Gemini 3.5 Flash, 3.1 Pro, etc.) scaled by typical workload splits for unified `totalTokens` tracking.
+*   **Regional Endpoint Configuration Guidance**: Document the mandatory client-side regional configuration for tools like the Antigravity CLI (`agy`) to ensure consistent data access audit logs are written for GCM and BigQuery user tracking.
 
 ### Non-Goals
-*   Deploying live cloud infrastructure automatically (we maintain the dashboards, YAML configs, and setup documentation).
-*   Supporting unauthenticated public model endpoints (all access must go through Google Cloud IAM authentication).
+*   Querying official Google Cloud billing invoices directly (we track estimated costs based on ingestion metrics).
+*   Supporting tracking of unauthenticated requests (all calls are traced back to a verified corporate Google account email via IAM).
 
 ---
 
 ## 4. Key Personas & Target Users
 
-*   **Platform / DevOps Engineers**: Need standard, secure GCP-managed logging patterns to track Developer AI API activity with zero additional infrastructure or routing layers to manage.
-*   **Engineering Leads & Budget Owners**: Need clear, accurate reports on token consumption and costs per user to allocate budgets and handle monthly chargebacks.
+*   **Engineering Leads & Budget Owners**: Need clear, real-time dashboards to understand which developers are calling which models, how many tokens they are consuming, and how much their activity is costing the organization in real-time.
+*   **Platform / DevOps Engineers**: Need robust, low-overhead dashboards that automatically work under either ingestion architecture (Audit Logs vs. Native request-response logs).
 
 ---
 
 ## 5. Requirements & Acceptance Criteria
 
 ### In-Scope
-*   **Dashboard v2 PromQL Migration**: Maintain Dashboard v2 upgraded to PromQL with the `or` fallback scheme to natively support both scalar counters and distribution metrics.
-*   **Native Ingestion Documentation**: Rewrite `HOW_TO_COLLECT_USER_DATA.md` and `USER_AND_USAGE_TRACKING_GUIDE.md` to instruct administrators how to enable native `setPublisherModelConfig` and query the logs.
-*   **Metric Schema Hardening**: Ensure `user-tokens-proxy.yaml` matches the structured OpenTelemetry (OTel) output fields generated by Vertex AI native logging.
+*   **Developer Cost-over-Time Widget**: A new XYChart (Line) in Dashboard v2 plotting real-time estimated USD cost per minute per user.
+*   **Developer Total Cost Summary Widget**: A new TimeSeriesTable with `outputFullDuration: true` displaying the cumulative USD cost for each developer over the selected timeframe with an explicit `"USD"` currency column.
+*   **Enhanced Per-User Model Breakdowns**: Refine and rename the per-user model breakdown tables and charts to make per-user token volumes by model incredibly prominent and easy to read.
+*   **Automated BigQuery Identity-Join View**: Packages `create_user_cost_attribution_view.sql` and `deploy_bq_view.sh` to allow administrators to deploy high-fidelity corporate cost attribution pipelines effortlessly in BigQuery.
 
 ### Acceptance Criteria
 
@@ -52,5 +54,8 @@ This update shifts the ingestion pattern of exact token usage from a custom logg
 | **AC-1** | **No GCM Crashes** | Dashboard v2 renders cleanly with no errors when queried against a `DISTRIBUTION` metric schema (Option 2). |
 | **AC-2** | **Dynamic Fallback** | All charts on Dashboard v2 automatically display exact token metrics if the native OTel metric exists, and fall back to request volumes if it does not. |
 | **AC-3** | **Pre-Auth Enforced** | All local tools authenticate developers using native Google Cloud IAM (e.g. ADC) before a model request is processed. |
-| **AC-4** | **Zero-Code Payload Logs** | Exact token sizes (prompt, output, cached) are logged natively on Vertex AI base models into a central BigQuery table with no intermediate server required. |
-| **AC-5** | **Cost & Security Aligned** | Complete reference documentation explaining the security benefit of native IAM and cost considerations of native request-response logging. |
+| **AC-4** | **Developer Cost Over Time** | Line chart dynamically sums and plots estimated USD cost per minute per user using correct pricing formulas. |
+| **AC-5** | **Developer Total Cost Summary** | A timeframe-responsive table sums and lists total USD cost per user, displaying user IDs, total costs, and an explicit `"USD"` currency column. |
+| **AC-6** | **Per-User Token Consumption** | Dedicated table and bar chart clearly show exact token count consumption per user, broken down by model ID. |
+| **AC-7** | **BigQuery SQL View Scripting** | Provide a valid, executable SQL schema file and executable shell deployment script to automatically build the unified identity cost view in BigQuery. |
+
