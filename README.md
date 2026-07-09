@@ -1,3 +1,5 @@
+![Google Cloud Developer Dashboard Header](assets/header.png)
+
 # ☕ Developer AI Tools Monitoring Dashboards
 
 This repository contains two pre-configured Google Cloud Monitoring (GCM) dashboard templates designed to monitor token consumption, request rates, responsiveness, costs, and rate limits for **Agent Platform (GEAP) / Vertex AI** model invocations.
@@ -9,7 +11,7 @@ These are particularly useful for tracking model usage driven by developer produ
 ## 📊 Dashboard Catalog
 
 ### 1. Developer AI Tools: Aggregate Usage & Cost
-👉 **[geap-monitoring-dashboard.json](geap-monitoring-dashboard.json)**
+👉 **[dashboards/geap-monitoring-dashboard.json](dashboards/geap-monitoring-dashboard.json)**
 *   **What it is for**: High-level aggregate visibility of your project's model usage.
 *   **Key Charts**:
     *   Token Consumption (Input vs. Output rates).
@@ -23,7 +25,7 @@ These are particularly useful for tracking model usage driven by developer produ
 *   **Cost**: **$0.00 (100% Free)**. Re-uses free, built-in system metrics scaled via Prometheus Query Language (PromQL) with dynamic timeframe scaling.
 
 ### 2. Developer AI Tools: User Token Tracker
-👉 **[geap-monitoring-dashboard-v2.json](geap-monitoring-dashboard-v2.json)**
+👉 **[dashboards/geap-monitoring-dashboard-v2.json](dashboards/geap-monitoring-dashboard-v2.json)**
 *   **What it is for**: Tracking down-to-the-user token consumption, requests, and model choices.
 *   **Key Charts**:
     *   Token Consumption by User over time.
@@ -96,12 +98,12 @@ From the directory containing the dashboard JSON files, run:
 # Deploy Dashboard 1 (Aggregate Usage & Cost)
 gcloud monitoring dashboards create \
   --project="coffee-and-codey" \
-  --config-from-file=geap-monitoring-dashboard.json
+  --config-from-file=dashboards/geap-monitoring-dashboard.json
 
 # Deploy Dashboard 2 (User Token Tracker)
 gcloud monitoring dashboards create \
   --project="coffee-and-codey" \
-  --config-from-file=geap-monitoring-dashboard-v2.json
+  --config-from-file=dashboards/geap-monitoring-dashboard-v2.json
 ```
 
 ### Method B: Via Cloud Console
@@ -147,12 +149,12 @@ We have pre-configured and provided two ready-to-use YAML definitions for this m
 ### 💎 Solution A2: Native Request-Response Logging (Exact Token Counts) - *DEPLOYED & ACTIVE!*
 *   **What it does**: Tracks exact input, output, and cached token sizes per developer natively inside Google Cloud's infrastructure, using `PublisherModelConfig` with **zero custom proxy servers to manage** and **100% pre-auth enforcement**!
 *   **Deployment Status**: **Successfully deployed and active on `gemini-2.5-flash` (region `us-central1`) and `gemini-3.5-flash` (location `global`) in project `coffee-and-codey`!**
-*   **Configuration File**: [user-tokens-proxy.yaml](user-tokens-proxy.yaml)
+*   **Configuration File**: [metrics/user-tokens-proxy.yaml](metrics/user-tokens-proxy.yaml)
 *   **How it was deployed**:
     1. Native `PublisherModelConfig` was registered for `gemini-2.5-flash` in region `us-central1`, and for `gemini-3.5-flash` using `location="global"` and the global multi-region endpoint.
     2. The `user_tokens` custom log-based metric was configured with the distribution schema:
        ```bash
-       gcloud logging metrics update user_tokens --config-from-file=user-tokens-proxy.yaml
+       gcloud logging metrics update user_tokens --config-from-file=metrics/user-tokens-proxy.yaml
        ```
 *   **Developer Environment Setup**: Developers must ensure that local environments have no legacy proxy endpoint overrides (remove/unset `VERTEX_API_ENDPOINT`) and are logged in natively using standard Application Default Credentials:
     ```bash
@@ -163,10 +165,10 @@ We have pre-configured and provided two ready-to-use YAML definitions for this m
 
 ### ⚡ Solution A1: No-Code Audit Logs (Request Counts) - *Alternative Fallback*
 *   **What it does**: Tracks developer request counts (as an alternative fallback) by intercepting Vertex AI API activity audit logs. This tracks request frequencies but cannot extract exact token volumes due to audit privacy rules.
-*   **Configuration File**: [user-tokens-audit-log.yaml](user-tokens-audit-log.yaml)
+*   **Configuration File**: [metrics/user-tokens-audit-log.yaml](metrics/user-tokens-audit-log.yaml)
 *   **How to fallback**: To transition back to tracking request counts, update the `user_tokens` metric:
     ```bash
-    gcloud logging metrics update user_tokens --config-from-file=user-tokens-audit-log.yaml
+    gcloud logging metrics update user_tokens --config-from-file=metrics/user-tokens-audit-log.yaml
     ```
 
 ---
@@ -224,5 +226,5 @@ You can then connect this BigQuery dataset directly to Looker Studio for beautif
 
 ## 📚 Reference Guides
 For deep-dive setup instructions and integration code, see:
-*   👉 **[HOW_TO_COLLECT_USER_DATA.md](HOW_TO_COLLECT_USER_DATA.md)**: Full steps to collect data from CLI runtimes.
-*   👉 **[USER_AND_USAGE_TRACKING_GUIDE.md](USER_AND_USAGE_TRACKING_GUIDE.md)**: Complete guide on log-based metric types, distribution extraction, and Looker/BigQuery analytics.
+*   👉 **[docs/HOW_TO_COLLECT_USER_DATA.md](docs/HOW_TO_COLLECT_USER_DATA.md)**: Full steps to collect data from CLI runtimes.
+*   👉 **[docs/USER_AND_USAGE_TRACKING_GUIDE.md](docs/USER_AND_USAGE_TRACKING_GUIDE.md)**: Complete guide on log-based metric types, distribution extraction, and Looker/BigQuery analytics.
