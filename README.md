@@ -32,6 +32,16 @@ These are particularly useful for tracking model usage driven by developer produ
     *   Model Types utilized per User.
 *   **Cost**: **$0.00** for small-to-medium teams (fits comfortably within Google Cloud's logging and custom metrics free tiers).
 
+> [!WARNING]
+> **🛑 DOES NOT WORK OUT-OF-THE-BOX (WILL REMAIN BLANK BY DEFAULT)**
+> 
+> **TL;DR - Why it won't work yet:**
+> 1. **No Global Audit Logs**: Developer tools (like `agy`) route requests to Vertex AI's logical `global` endpoint by default. GCP **does not write standard data-access audit logs** for global-endpoint traffic.
+> 2. **No User Identity in Payloads**: Native platform-level payload logs redact the caller's email for privacy. Without audit logs or client overrides, GCM has no way to map a model request to a corporate identity, leaving all user-specific widgets completely empty.
+> 
+> **How to make it work**: Developers must update their workstation settings (`~/.gemini/antigravity-cli/settings.json`) to target a regional endpoint (e.g., `"location": "us-central1"`) to generate the required audit logs, or manually inject a custom `developer_email` request label.
+
+
 ---
 
 ## 👥 Who are these for?
